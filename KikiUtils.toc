@@ -1,0 +1,11 @@
+## Interface: 50100
+## Title: Kiki Utils
+## Author: Kiki From European Conseil des Ombres
+## Version: 9.0
+## Notes: Useful script functions, DAoC like MouseLook, RandomMount, and more
+## Notes-frFR: Fonctions pratiques pour les scripts, mode vue-souris comme DAoC, montures aléatoires, et plus encore
+## OptionalDeps: sct, AlreadyKilled, BankItems, MikScrollingBattleText
+## Dependencies: 
+## SavedVariables: KU_Config
+## SavedVariablesPerCharacter: KU_CharConfig
+KikiUtils.xml
