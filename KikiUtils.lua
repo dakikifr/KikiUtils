@@ -162,6 +162,7 @@ local KU_IS_AUTORUN = 0;
 local KU_IS_COMBAT = 0;
 local KU_CHECK_PALADIN_SEAL = 0;
 local KU_IsDruid = false;
+local KU_IsMonk = false;
 local KU_IsHunter = false;
 local KU_IsRogue = false;
 local KU_IsShaman = false;
@@ -905,7 +906,7 @@ local function KU_SetNewBags(printmsg)
     then
       KU_ChatPrint(KU_CHAT_BAGS_ON);
     end
-    --hooksecurefunc("updateContainerFrameAnchors",KU_updateContainerFrameAnchors);
+    hooksecurefunc("UpdateContainerFrameAnchors",KU_updateContainerFrameAnchors);
   else
     if(printmsg)
     then
@@ -1889,6 +1890,9 @@ local function KikiUtils_StartInitVars()
     if(clas == "DRUID")
     then
       KU_IsDruid = true;
+	elseif(clas == "MONK")
+	then
+	  KU_IsMonk = true;
     elseif(clas == "HUNTER")
     then
       KU_IsHunter = true;
@@ -2192,6 +2196,8 @@ function KikiUtils_OnEvent(self,event,...)
       KU_SetupMountMacros();
     end
     KU_SetClock(false);
+	LossOfControlFrame:ClearAllPoints();
+	LossOfControlFrame:SetPoint("CENTER",UIParent,"CENTER",0,-200);
   elseif(event == "PLAYER_LEAVING_WORLD")
   then
     KU_CheckRestoreMusic();
@@ -2909,6 +2915,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
   local noflyable_add = "";
   local flyable_add = "";
   local swim_add = "";
+  local roll_name = nil;
   
   if(KU_FlyableZone()) -- Must detect flyable myself, since [flyable] macro conditionnal returns "true" in northrend if lvl < 77
   then
@@ -2944,6 +2951,16 @@ local function _KU_CreateMountMacros(landmount,flymount)
     ghost = KU_GHOST_WOLF;
   end
   
+  if(KU_IsMonk)
+  then
+    roll_name = GetSpellInfo(109132); -- Roll
+  end
+
+  if(KU_IsShaman)
+  then
+    ghost = KU_GHOST_WOLF;
+  end
+  
   -- OOC Macro
   macrotext = "";
   if(landmount)
@@ -2971,6 +2988,10 @@ local function _KU_CreateMountMacros(landmount,flymount)
       macrotext = macrotext .. "[nomounted,stance:0]"..travel_name;
     end
     macrotext = macrotext .. "\n/cancelform [nostance:0]\n";
+  end
+  if(roll_name)
+  then
+    macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
   end
   if(ghost)
   then
@@ -3201,6 +3222,9 @@ local function KikiUtils_SetupCure()
   elseif(cls == "PALADIN")
   then
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",4987); -- Cleanse (Poison/Disease/Magic)
+  elseif(cls == "MONK")
+  then
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",115450); -- Detox (Poison/Disease)
   elseif(cls == "PRIEST")
   then
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",528); -- Cure Disease (Disease/Poison)
