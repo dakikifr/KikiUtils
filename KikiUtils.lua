@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.0
+    Version 9.1
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -100,6 +100,8 @@ Kiki Utils by Kiki
        - December, 27th 2010: Removed 'hidecb' feature
       - 8.6:
        - July, 5th 2011: Added a new "mount" type used in instances only (/ku addinstmount /ku delinstmount)
+      - 9.1:
+       - Feb, 6th 2014: Fixed for WoW 5.4
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -1885,7 +1887,7 @@ local function KikiUtils_StartInitVars()
   if((playerName) and (playerName ~= UNKNOWNOBJECT) and (playerName ~= UKNOWNBEING))
   then
     -- Initialize Toon specific stuff
-    KU_PlayerOfRealm = playerName.." of "..GetCVar("realmName");
+    KU_PlayerOfRealm = playerName.." of "..GetRealmName();
     local _,clas = UnitClass("player");
     if(clas == "DRUID")
     then
