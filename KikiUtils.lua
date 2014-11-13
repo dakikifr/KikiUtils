@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.1
+    Version 9.2
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -102,6 +102,8 @@ Kiki Utils by Kiki
        - July, 5th 2011: Added a new "mount" type used in instances only (/ku addinstmount /ku delinstmount)
       - 9.1:
        - Feb, 6th 2014: Fixed for WoW 5.4
+      - 9.2:
+       - Nov, 10th 2014: Fixed for WoW 6.0
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -300,175 +302,15 @@ end
 
 --------------- Hooked functions ---------------
 
-local KU_orig_QuestLog_Update = nil;
-function KU_QuestLog_Update32()
+local KU_orig_QuestLogQuests_Update = nil;
+function KU_QuestLogQuests_Update32(poiTable)
   local old_mode = ENABLE_COLORBLIND_MODE;
   if(KU_ShowQuestLevels)
   then
     ENABLE_COLORBLIND_MODE = "1";
   end
-  KU_orig_QuestLog_Update();
+  KU_orig_QuestLogQuests_Update(poiTable);
   ENABLE_COLORBLIND_MODE = old_mode;
-end
-
-function KU_QuestLog_Update32_secure()
-	-- Update the quest listing
-	local numEntries, numQuests = GetNumQuestLogEntries();
-	local buttons = QuestLogScrollFrame.buttons;
-	local numButtons = #buttons;
-	local scrollOffset = HybridScrollFrame_GetOffset(QuestLogScrollFrame);
-	local buttonHeight = buttons[1]:GetHeight();
-	local displayedHeight = 0;
-
-	local numPartyMembers = GetNumPartyMembers();
-	local questIndex, questLogTitle, questTitleTag, questNumGroupMates, questNormalText, questCheck;
-	local title, level, questTag, suggestedGroup, isHeader, isCollapsed, isComplete, isDaily;
-	local color;
-	local partyMembersOnQuest, tempWidth, textWidth;
-	for i=1, numButtons do
-		questLogTitle = buttons[i];
-		questIndex = i + scrollOffset;
-		questLogTitle:SetID(questIndex);
-		questTitleTag = questLogTitle.tag;
-		questNumGroupMates = questLogTitle.groupMates;
-		questCheck = questLogTitle.check;
-		questNormalText = questLogTitle.normalText;
-		if ( questIndex <= numEntries ) then
-			title, level, questTag, suggestedGroup, isHeader, isCollapsed, isComplete, isDaily = GetQuestLogTitle(questIndex);
-
-			if ( isHeader ) then
-				-- set the title
-				if ( title ) then
-					questLogTitle:SetText(title);
-				else
-					questLogTitle:SetText("");
-				end
-
-				-- set the normal texture based on the header's collapsed state
-				if ( isCollapsed ) then
-					questLogTitle:SetNormalTexture("Interface\\Buttons\\UI-PlusButton-Up");
-				else
-					questLogTitle:SetNormalTexture("Interface\\Buttons\\UI-MinusButton-Up"); 
-				end
-				questLogTitle:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight");
-
-				questNumGroupMates:Hide();
-				questTitleTag:Hide();
-				questCheck:Hide();
-			else
-				-- set the title
-				title = "["..level.."] " .. title;
-				questLogTitle:SetText("  "..title);
-
-				-- this isn't a header, hide the header textures
-				questLogTitle:SetNormalTexture("");
-				questLogTitle:SetHighlightTexture("");
-
-				-- If not a header see if any nearby group mates are on this quest
-				partyMembersOnQuest = 0;
-				for j=1, numPartyMembers do
-					if ( IsUnitOnQuest(questIndex, "party"..j) ) then
-						partyMembersOnQuest = partyMembersOnQuest + 1;
-					end
-				end
-				if ( partyMembersOnQuest > 0 ) then
-					questNumGroupMates:SetText("["..partyMembersOnQuest.."]");
-					questNumGroupMates:Show();
-				else
-					questNumGroupMates:Hide();
-				end
-
-				-- figure out which tag to show, if any
-				if ( isComplete and isComplete < 0 ) then
-					questTag = FAILED;
-				elseif ( isComplete and isComplete > 0 ) then
-					questTag = COMPLETE;
-				elseif ( isDaily ) then
-					if ( questTag ) then
-						questTag = format(DAILY_QUEST_TAG_TEMPLATE, questTag);
-					else
-						questTag = DAILY;
-					end
-				end
-				if ( questTag ) then
-					questTitleTag:SetText("("..questTag..")");
-					questTitleTag:Show();
-				else
-					questTitleTag:Hide();
-				end
-
-				-- show the quest check if the quest is being watched
-				if ( IsQuestWatched(questIndex) ) then
-					questCheck:Show();
-				else
-					questCheck:Hide();
-				end
-			end
-
-			-- Save if its a header or not
-			questLogTitle.isHeader = isHeader;
-
-			-- resize the title button so everything fits where it's supposed to
-			QuestLogTitleButton_Resize(questLogTitle);
-
-			-- Color the quest title and highlight according to the difficulty level
-			if ( isHeader ) then
-				color = QuestDifficultyColors["header"];
-			else
-				color = GetQuestDifficultyColor(level);
-			end
-			questTitleTag:SetTextColor(color.r, color.g, color.b);
-			questLogTitle:SetNormalFontObject(color.font);
-			questNumGroupMates:SetTextColor(color.r, color.g, color.b);
-			questLogTitle.r = color.r;
-			questLogTitle.g = color.g;
-			questLogTitle.b = color.b;
-			questLogTitle:Show();
-
-			-- Place the highlight and lock the highlight state
-			if ( questLogSelection == questIndex ) then
-				_QuestLog_HighlightQuest(questLogTitle);
-			else
-				questLogTitle:UnlockHighlight();
-			end
-		else
-			questLogTitle:Hide();
-		end
-		displayedHeight = displayedHeight + buttonHeight;
-	end
-end
-
-function KU_QuestLog_Update()
-	if ( KU_ShowQuestLevels ) then
-		local numEntries, numQuests = GetNumQuestLogEntries();
-		local questIndex, questLogTitle, questTitleTag;
-		local questLogTitleText, level, questTag, isHeader, isCollapsed, isComplete;
-		local tempWidth, textWidth;
-		for i=1, QUESTS_DISPLAYED do
-			questIndex = i + FauxScrollFrame_GetOffset(QuestLogListScrollFrame);
-			questLogTitle = _G["QuestLogTitle"..i];
-			questTitleTag = _G["QuestLogTitle"..i.."Tag"];
-			questNormalText = _G["QuestLogTitle"..i.."NormalText"];
-			if ( questIndex <= numEntries ) then
-				questLogTitleText, level, questTag, suggestedGroup, isHeader, isCollapsed, isComplete = GetQuestLogTitle(questIndex);
-				if ( not isHeader ) then
-					local text = "  "..string.format("[%d] %s", level, questLogTitleText)
-					questLogTitle:SetText(text);
-					QuestLogDummyText:SetText(text);
-					if ( questTag ) then
-						-- Shrink text to accomdate quest tags without wrapping
-						tempWidth = 275 - 15 - questTitleTag:GetWidth();
-						if ( QuestLogDummyText:GetWidth() > tempWidth ) then
-							textWidth = tempWidth;
-						else
-							textWidth = QuestLogDummyText:GetWidth();
-						end
-						questNormalText:SetWidth(tempWidth);
-					end
-				end
-			end
-		end
-	end
 end
 
 local function KU_GetScreenHeight(col)
@@ -939,13 +781,10 @@ local function KU_SetNewLevel(printmsg)
     then
       KU_ChatPrint(KU_CHAT_LEVEL_ON);
     end
-    if(QuestLogScrollFrame == nil) -- Pre 3.2
+    if(KU_orig_QuestLogQuests_Update == nil) -- Never hooked
     then
-      hooksecurefunc("QuestLog_Update",KU_QuestLog_Update);
-    elseif(KU_orig_QuestLog_Update == nil) -- Never hooked
-    then
-      KU_orig_QuestLog_Update = QuestLog_Update;
-      QuestLog_Update = KU_QuestLog_Update32;
+      KU_orig_QuestLogQuests_Update = QuestLogQuests_Update;
+      QuestLogQuests_Update = KU_QuestLogQuests_Update32;
     end
     KU_ShowQuestLevels = true;
   else
@@ -2908,9 +2747,7 @@ end
 
 local function _KU_CreateMountMacros(landmount,flymount)
   local macrotext;
-  local aqua_name = nil;
   local travel_name = nil;
-  local flight_name = nil;
   local ghost = nil;
   local mount_add = "";
   local flyable = false;
@@ -2936,16 +2773,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
 
   if(KU_IsDruid)
   then
-    aqua_name = select(2,GetShapeshiftFormInfo(2));
-    travel_name = select(2,GetShapeshiftFormInfo(4));
-    local f_name;
-    for i = 1, GetNumShapeshiftForms()
-    do
-      f_name = select(2,GetShapeshiftFormInfo(i));
-      if(f_name and strfind(f_name,KU_FLIGHT_FORM)) then
-        flight_name = f_name;
-      end
-    end
+    travel_name = select(2,GetShapeshiftFormInfo(3));
     mount_add = "stance:0,";
   end
   if(KU_IsShaman)
@@ -2974,21 +2802,14 @@ local function _KU_CreateMountMacros(landmount,flymount)
       macrotext = "/use ["..mount_add.."nomounted,noswimming,nocombat"..noflyable_add..swim_add.."]"..landmount.."\n";
     end
   end
-  if(aqua_name or travel_name)
+  if(travel_name)
   then
     macrotext = macrotext .. "/cast ";
-    if(aqua_name) -- Have Aqua form
+    if(travel_name and flyable) -- Have Flight form
     then
-      macrotext = macrotext .. "[swimming]"..aqua_name..";";
+      macrotext = macrotext .. "[nomounted,stance:0,nocombat"..flyable_add.."]"..travel_name..";";
     end
-    if(flight_name and flyable) -- Have Flight form
-    then
-      macrotext = macrotext .. "[nomounted,stance:0,nocombat"..flyable_add.."]"..flight_name..";";
-    end
-    if(travel_name) -- Have Travel form
-    then
-      macrotext = macrotext .. "[nomounted,stance:0]"..travel_name;
-    end
+    macrotext = macrotext .. "[nomounted,stance:0]"..travel_name;
     macrotext = macrotext .. "\n/cancelform [nostance:0]\n";
   end
   if(roll_name)
