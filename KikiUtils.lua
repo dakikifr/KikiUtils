@@ -205,6 +205,7 @@ local KU_SubZoneRegistered = false;
 local KU_ActiveTalents = nil;
 local KU_ActiveTree = nil;
 local KU_MustRestoreMusic = false;
+local KU_FROSTWOLF_WAR_WOLF_SPELLID = 164222;
 
 local strfind = string.find;
 local strupper = string.upper;
@@ -1613,7 +1614,7 @@ function KU_GetMountToUse(dontgetflying)
       end
     end
   end
-  
+
   -- Then check for abyssal sea horse
   if(KU_CurrentZone == KU_ZONE_KELPTHAR or KU_CurrentZone == KU_ZONE_SHIMMERING_EXPANSE or KU_CurrentZone == KU_ZONE_ABYSSAL_DEPTHS)
   then
@@ -1638,6 +1639,18 @@ function KU_GetMountToUse(dontgetflying)
     end
   end
 
+  -- Then check for Frostwolf War Wolf
+  if(KU_CurrentZone == KU_ZONE_NAGRAND)
+  then
+	--local has_mount,mount_name = KU_HasMount(KU_FROSTWOLF_WAR_WOLF_SPELLID); -- Don't work :/
+	local has_mount = true;
+	local mount_name = GetSpellInfo(KU_FROSTWOLF_WAR_WOLF_SPELLID);
+	if(has_mount)
+	then
+	  flymount = mount_name; -- Right now, return as a flyable mount, must check for WoD flying skill
+	end
+  end
+  
   -- Check AQ mount
   if(KU_CurrentZone == KU_ZONE_TEMPLE_AHNQIRAJ) -- Ahn'Qiraj
   then

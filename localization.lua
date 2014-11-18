@@ -144,6 +144,7 @@ if ( GetLocale() == "frFR" ) then
   KU_ZONE_KELPTHAR = "Kelp'thar Forest";
   KU_ZONE_SHIMMERING_EXPANSE = "Shimmering Expanse";
   KU_ZONE_ABYSSAL_DEPTHS = "Abyssal Depths";
+  KU_ZONE_NAGRAND = "Nagrand";
   KU_SUBZONE_KRASUS_LANDING = "Aire de Krasus";
 
 elseif ( GetLocale() == "deDE" ) then
@@ -284,6 +285,7 @@ elseif ( GetLocale() == "deDE" ) then
   KU_ZONE_KELPTHAR = "Kelp'thar Forest";
   KU_ZONE_SHIMMERING_EXPANSE = "Shimmering Expanse";
   KU_ZONE_ABYSSAL_DEPTHS = "Abyssal Depths";
+  KU_ZONE_NAGRAND = "Nagrand";
   KU_SUBZONE_KRASUS_LANDING = "Krasus' Landing";
 
 else
@@ -425,6 +427,7 @@ else
   KU_ZONE_KELPTHAR = "Kelp'thar Forest";
   KU_ZONE_SHIMMERING_EXPANSE = "Shimmering Expanse";
   KU_ZONE_ABYSSAL_DEPTHS = "Abyssal Depths";
+  KU_ZONE_NAGRAND = "Nagrand";
   KU_SUBZONE_KRASUS_LANDING = "Krasus' Landing";
 
 end
