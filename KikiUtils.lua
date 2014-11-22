@@ -2994,7 +2994,8 @@ function KU_SetupForceAttackMacro()
     shot = KU_GetToonConfigString("ShotName");
   end
   
-  local macrotext = "/dismount [mounted]\n/targetnearestennemy [noexists]\n/startattack\n";
+  --local macrotext = "/dismount [mounted]\n/targetnearestennemy [noexists]\n/startattack\n";
+  local macrotext = "/targetnearestennemy [noexists]\n/startattack\n";
   if(shot ~= "")
   then
     macrotext = macrotext .. "/cast [exists]"..shot;
