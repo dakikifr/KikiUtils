@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.2
+    Version 9.3
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -104,6 +104,8 @@ Kiki Utils by Kiki
        - Feb, 6th 2014: Fixed for WoW 5.4
       - 9.2:
        - Nov, 10th 2014: Fixed for WoW 6.0
+      - 9.3:
+       - Jan, 4th 2015: Added SpeedOfLight to auto-travel key
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -206,6 +208,7 @@ local KU_ActiveTalents = nil;
 local KU_ActiveTree = nil;
 local KU_MustRestoreMusic = false;
 local KU_FROSTWOLF_WAR_WOLF_SPELLID = 164222;
+local KU_SPEED_OF_LIGHT_SPELLID = 85499;
 
 local strfind = string.find;
 local strupper = string.upper;
@@ -2778,7 +2781,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
       --flyable_add = ",flyable";
     end
   end
-  
+
   if(landmount == GetSpellInfo(75207)) -- Abyssal Searhorse
   then
     swim_add = ",swimming";
@@ -2799,11 +2802,6 @@ local function _KU_CreateMountMacros(landmount,flymount)
     roll_name = GetSpellInfo(109132); -- Roll
   end
 
-  if(KU_IsShaman)
-  then
-    ghost = KU_GHOST_WOLF;
-  end
-  
   -- OOC Macro
   macrotext = "";
   if(landmount)
@@ -2847,6 +2845,13 @@ local function _KU_CreateMountMacros(landmount,flymount)
     else
       macrotext = macrotext .. "/castsequence "..KU_CHEETAH..","..KU_HAWK.."\n";
     end
+  elseif(KU_IsPaladin)
+  then
+    local spd_of_light = GetSpellInfo(KU_SPEED_OF_LIGHT_SPELLID);
+    if(spd_of_light)
+	then
+	  macrotext = macrotext .. "/cast [nomounted]"..spd_of_light.."\n";
+	end
   end
   macrotext = macrotext .. "/dismount [mounted]";
   if(string.len(macrotext) > 255)
@@ -3173,7 +3178,40 @@ function KU_TextStatusBar_UpdateTextString(textStatusBar)
   end
 end
 
-hooksecurefunc("TextStatusBar_UpdateTextString",KU_TextStatusBar_UpdateTextString);
+--hooksecurefunc("TextStatusBar_UpdateTextString",KU_TextStatusBar_UpdateTextString);
+
+function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, value, valueMin, valueMax)
+	local fname = statusFrame:GetName();
+	if( (strfind(fname,"FrameHealthBar") or strfind(fname,"FrameManaBar")) and KU_GetToonConfig("ShowPercent") )
+	then
+		if ( ( tonumber(valueMax) ~= valueMax or valueMax > 0 ) and not ( statusFrame.pauseUpdates ) ) then
+			local valueDisplay = value;
+			local valueMaxDisplay = valueMax;
+			if ( statusFrame.capNumericDisplay ) then
+				valueDisplay = AbbreviateLargeNumbers(value);
+				valueMaxDisplay = AbbreviateLargeNumbers(valueMax);
+			else
+				valueDisplay = BreakUpLargeNumbers(value);
+				valueMaxDisplay = BreakUpLargeNumbers(valueMax);
+			end
+
+			local textDisplay = GetCVar("statusTextDisplay");
+			if ( textDisplay ~= "NUMERIC" or statusFrame.showPercentage ) or ( value == 0 and statusFrame.zeroText ) then
+				return;
+			else
+				statusFrame.isZero = nil;
+				local percent = tostring(math.ceil((value / valueMax) * 100)) .. "%";
+				if ( statusFrame.prefix and (statusFrame.alwaysPrefix or not (statusFrame.cvar and GetCVar(statusFrame.cvar) == "1" and statusFrame.textLockable) ) ) then
+					textString:SetText(statusFrame.prefix.." "..valueDisplay.." / "..valueMaxDisplay.." ("..percent..")");
+				else
+					textString:SetText(valueDisplay.." / "..valueMaxDisplay.." ("..percent..")");
+				end
+			end
+		end
+	end
+end
+
+hooksecurefunc("TextStatusBar_UpdateTextStringWithValues",KU_TextStatusBar_UpdateTextStringWithValues);
 
 function KU_PrintPoints(frame)
   if(frame == nil or frame.GetNumPoints == nil or frame.GetPoint == nil)
