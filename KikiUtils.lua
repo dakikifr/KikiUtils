@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.3
+    Version 9.4
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -106,6 +106,8 @@ Kiki Utils by Kiki
        - Nov, 10th 2014: Fixed for WoW 6.0
       - 9.3:
        - Jan, 4th 2015: Added SpeedOfLight to auto-travel key
+      - 9.4:
+       - Jan, 19th 2015: Attempt to fix Taint issues
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -386,24 +388,24 @@ function KU_QuestLogQuests_Update(poiTable)
 				else
 					button:SetText("");
 				end
-				button:ClearAllPoints();
-				if ( prevButton ) then
-					button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
-				else
-					button:SetPoint("TOPLEFT", 1, -6);
-				end
-				button:Show();				
+				--button:ClearAllPoints();
+				--if ( prevButton ) then
+					--button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
+				--else
+					--button:SetPoint("TOPLEFT", 1, -6);
+				--end
+				--button:Show();				
 				if ( mapHeaderIndex == headerLogIndex ) then
 					mapHeaderButtonIndex = headerIndex;
 				end
-				button.questLogIndex = headerLogIndex;
+				--button.questLogIndex = headerLogIndex;
 				prevButton = button;
 			end
 
 			local totalHeight = 8;
 			titleIndex = titleIndex + 1;
 			button = QuestLogQuests_GetTitleButton(titleIndex);
-			button.questID = questID;
+			--button.questID = questID;
 
 			if ( localQuestsGroup and not firstLocalQuestButton ) then
 				if ( titleIndex > 1 ) then
@@ -435,7 +437,7 @@ function KU_QuestLogQuests_Update(poiTable)
 			end
 
 			button.Text:SetText(title);
-			button.Text:SetTextColor( difficultyColor.r, difficultyColor.g, difficultyColor.b );
+			--button.Text:SetTextColor( difficultyColor.r, difficultyColor.g, difficultyColor.b );
 			
 			totalHeight = totalHeight + button.Text:GetHeight();
 			if ( IsQuestHardWatched(questLogIndex) ) then
@@ -446,7 +448,7 @@ function KU_QuestLogQuests_Update(poiTable)
 			end
 			
 			-- tag. daily icon can be alone or before other icons except for COMPLETED or FAILED
-			local tagID;
+			--[[local tagID;
 			local questTagID, tagName = GetQuestTagInfo(questID);
 			if ( isComplete and isComplete < 0 ) then
 				tagID = "FAILED";
@@ -478,7 +480,7 @@ function KU_QuestLogQuests_Update(poiTable)
 				end
 			else
 				button.TagTexture:Hide();
-			end
+			end]]
 			
 			-- POI/objectives
 			if ( showQuestObjectives ) then			
@@ -498,16 +500,16 @@ function KU_QuestLogQuests_Update(poiTable)
 				if ( isComplete ) then
 					objectiveIndex = objectiveIndex + 1;
 					local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
-					objectiveFrame.questID = questID;
-					objectiveFrame:Show();
-					if ( isBreadcrumb ) then
+					--objectiveFrame.questID = questID;
+					--objectiveFrame:Show();
+					--[[if ( isBreadcrumb ) then
 						objectiveFrame.Text:SetText(GetQuestLogCompletionText(questLogIndex));
 					else
 						objectiveFrame.Text:SetText(QUEST_WATCH_QUEST_READY);
-					end
+					end]]
 					local height = objectiveFrame.Text:GetStringHeight();
-					objectiveFrame:SetHeight(height);
-					objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
+					--objectiveFrame:SetHeight(height);
+					--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
 					totalHeight = totalHeight + height + 3;						
 				else	
 					local prevObjective;
@@ -516,16 +518,16 @@ function KU_QuestLogQuests_Update(poiTable)
 						if ( text and not finished ) then
 							objectiveIndex = objectiveIndex + 1;
 							local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
-							objectiveFrame.questID = questID;
-							objectiveFrame:Show();
-							objectiveFrame.Text:SetText(text);
+							--objectiveFrame.questID = questID;
+							--objectiveFrame:Show();
+							--objectiveFrame.Text:SetText(text);
 							local height = objectiveFrame.Text:GetStringHeight();
-							objectiveFrame:SetHeight(height);
+							--objectiveFrame:SetHeight(height);
 							if ( prevObjective ) then
-								objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
+								--objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
 								height = height + 2;
 							else
-								objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
+								--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
 								height = height + 3;
 							end
 							totalHeight = totalHeight + height;								
@@ -535,16 +537,16 @@ function KU_QuestLogQuests_Update(poiTable)
 					if ( requiredMoney > playerMoney ) then
 						objectiveIndex = objectiveIndex + 1;
 						local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
-						objectiveFrame.questID = questID;
-						objectiveFrame:Show();
-						objectiveFrame.Text:SetText(GetMoneyString(playerMoney).." / "..GetMoneyString(requiredMoney));
+						--objectiveFrame.questID = questID;
+						--objectiveFrame:Show();
+						--objectiveFrame.Text:SetText(GetMoneyString(playerMoney).." / "..GetMoneyString(requiredMoney));
 						local height = objectiveFrame.Text:GetStringHeight();
-						objectiveFrame:SetHeight(height);
+						--objectiveFrame:SetHeight(height);
 						if ( prevObjective ) then
-							objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
+							--objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
 							height = height + 2;
 						else
-							objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
+							--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
 							height = height + 3;
 						end
 						totalHeight = totalHeight + height;
@@ -564,28 +566,28 @@ function KU_QuestLogQuests_Update(poiTable)
 						end
 					end
 					if ( poiButton ) then
-						poiButton:SetPoint("TOPLEFT", button, 6, -4);
-						poiButton:SetFrameLevel(poiFrameLevel);
-						poiButton.parent = button;
+						--poiButton:SetPoint("TOPLEFT", button, 6, -4);
+						--poiButton:SetFrameLevel(poiFrameLevel);
+						--poiButton.parent = button;
 					end
 					-- extra room because of POI icon
 					totalHeight = totalHeight + 6;
-					button.Text:SetPoint("TOPLEFT", 31, -8);
-				else
-					button.Text:SetPoint("TOPLEFT", 31, -4);
+					--button.Text:SetPoint("TOPLEFT", 31, -8);
+				--[[else
+					button.Text:SetPoint("TOPLEFT", 31, -4);]]
 				end
-			else
-				button.Text:SetPoint("TOPLEFT", 31, -4);
+			--[[else
+				button.Text:SetPoint("TOPLEFT", 31, -4);]]
 			end
 			button:SetHeight(totalHeight);
-			button.questLogIndex = questLogIndex;
-			button:ClearAllPoints();
+			--button.questLogIndex = questLogIndex;
+			--[[button:ClearAllPoints();
 			if ( prevButton ) then
 				button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
 			else
 				button:SetPoint("TOPLEFT", 1, -6);
 			end
-			button:Show();			
+			button:Show();]]
 			prevButton = button;
 		end
 	end
@@ -601,7 +603,7 @@ function KU_QuestLogQuests_Update(poiTable)
 			lastQuestButton = QuestLogQuests_GetTitleButton(titleIndex);
 		end
 		-- now rearrange
-		if ( storyID ) then
+		--[[if ( storyID ) then
 			firstLocalQuestButton:SetPoint("TOPLEFT", QuestScrollFrame.Contents.StoryHeader, "BOTTOMLEFT", 0, 0);
 		else
 			firstLocalQuestButton:SetPoint("TOPLEFT", 1, -6);
@@ -609,7 +611,7 @@ function KU_QuestLogQuests_Update(poiTable)
 		QuestLogQuests_GetTitleButton(1):SetPoint("TOPLEFT", lastQuestButton, "BOTTOMLEFT", 0, 0);
 		if ( firstNextQuestButton ) then
 			firstNextQuestButton:SetPoint("TOPLEFT", origAnchor, "BOTTOMLEFT", 0, 0);
-		end	
+		end	]]
 	end
 
 	-- background
@@ -2646,6 +2648,10 @@ function KikiUtils_OnLoad(self)
   SLASH_KU1 = "/ku";
   SlashCmdList["KU"] = function(msg)
     KU_Commands(msg);
+  end
+  SLASH_RL1 = "/rl";
+  SlashCmdList["RL"] = function(msg)
+    ReloadUI();
   end
 end
 
