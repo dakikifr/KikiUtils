@@ -306,15 +306,322 @@ end
 
 --------------- Hooked functions ---------------
 
-local KU_orig_QuestLogQuests_Update = nil;
-function KU_QuestLogQuests_Update32(poiTable)
-  local old_mode = ENABLE_COLORBLIND_MODE;
+function KU_QuestLogQuests_Update(poiTable)
   if(KU_ShowQuestLevels)
   then
-    ENABLE_COLORBLIND_MODE = "1";
+	local playerMoney = GetMoney();
+    local numEntries, numQuests = GetNumQuestLogEntries();
+	local showPOIs = GetCVarBool("questPOI");
+
+	local mapID, isContinent = GetCurrentMapAreaID();
+	local showQuestObjectives = (not isContinent) and (mapID > 0);
+	
+	local mapHeaderIndex = GetCurrentMapHeaderIndex();
+	local button, prevButton;
+	
+	QuestPOI_ResetUsage(QuestScrollFrame.Contents);
+
+	local poiFrameLevel = QuestLogQuests_GetHeaderButton(1):GetFrameLevel() + 2;
+
+	local storyID, storyMapID = GetZoneStoryID();
+	if ( storyID ) then
+		QuestScrollFrame.Contents.StoryHeader:Show();
+		QuestScrollFrame.Contents.StoryHeader.Text:SetText(GetMapNameByID(storyMapID));
+		local numCriteria = GetAchievementNumCriteria(storyID);
+		local completedCriteria = 0;
+		for i = 1, numCriteria do
+			local _, _, completed = GetAchievementCriteriaInfo(storyID, i);
+			if ( completed ) then
+				completedCriteria = completedCriteria + 1;
+			end
+		end
+		QuestScrollFrame.Contents.StoryHeader.Progress:SetFormattedText(QUEST_STORY_STATUS, completedCriteria, numCriteria);
+		if ( mapHeaderIndex > 0 ) then
+			-- always expand header for story zone
+			local _, _, _, _, isCollapsed = GetQuestLogTitle(mapHeaderIndex);
+			if ( isCollapsed ) then
+				-- ExpandQuestHeader will signal QUEST_LOG_UPDATE which would otherwise trigger another QuestLogQuests_Update
+				QuestMapFrame.ignoreQuestLogUpdate = true;
+				ExpandQuestHeader(mapHeaderIndex);
+				QuestMapFrame.ignoreQuestLogUpdate = nil;
+			end
+		end
+		prevButton = QuestScrollFrame.Contents.StoryHeader;
+	else
+		QuestScrollFrame.Contents.StoryHeader:Hide();
+	end
+
+	local localQuestsGroup;
+	local firstLocalQuestButton;
+	local nextQuestsGroup;
+	local firstNextQuestButton;
+
+	local headerIndex = 0;
+	local titleIndex = 0;
+	local objectiveIndex = 0;
+	local headerTitle, headerOnMap, headerShown, headerLogIndex, mapHeaderButtonIndex;
+	for questLogIndex = 1, numEntries do
+		local title, level, suggestedGroup, isHeader, isCollapsed, isComplete, frequency, questID, startEvent, displayQuestID, isOnMap, hasLocalPOI, isTask, isStory = GetQuestLogTitle(questLogIndex);	
+		local difficultyColor = GetQuestDifficultyColor(level);
+		if ( isHeader ) then
+			headerTitle = title;
+			headerOnMap = isOnMap;
+			headerShown = false;
+			headerLogIndex = questLogIndex;
+			difficultyColor = QuestDifficultyColors["header"];
+			if ( questLogIndex == mapHeaderIndex ) then
+				localQuestsGroup = true;
+			elseif ( localQuestsGroup ) then
+				localQuestsGroup = false;
+				nextQuestsGroup = true;
+			end
+		elseif ( headerOnMap and isOnMap and not isTask ) then
+			-- we have at least one valid entry, show the header for it
+			if ( not headerShown and not showQuestObjectives ) then
+				headerShown = true;
+				headerIndex = headerIndex + 1;
+				button = QuestLogQuests_GetHeaderButton(headerIndex);
+				if ( headerTitle ) then
+					button:SetText(headerTitle);
+				else
+					button:SetText("");
+				end
+				button:ClearAllPoints();
+				if ( prevButton ) then
+					button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
+				else
+					button:SetPoint("TOPLEFT", 1, -6);
+				end
+				button:Show();				
+				if ( mapHeaderIndex == headerLogIndex ) then
+					mapHeaderButtonIndex = headerIndex;
+				end
+				button.questLogIndex = headerLogIndex;
+				prevButton = button;
+			end
+
+			local totalHeight = 8;
+			titleIndex = titleIndex + 1;
+			button = QuestLogQuests_GetTitleButton(titleIndex);
+			button.questID = questID;
+
+			if ( localQuestsGroup and not firstLocalQuestButton ) then
+				if ( titleIndex > 1 ) then
+					firstLocalQuestButton = button;
+				else
+					-- no need to move this group of quests, it's already at the top
+					localQuestsGroup = nil;
+				end
+			end
+			if ( nextQuestsGroup and not firstNextQuestButton ) then
+				firstNextQuestButton = button;
+			end
+
+			if ( displayQuestID ) then
+				title = questID.." - "..title;
+			end
+			title = "["..level.."] " .. title;
+			
+			-- If not a header see if any nearby group mates are on this quest
+			local partyMembersOnQuest = 0;
+			for j=1, GetNumSubgroupMembers() do
+				if ( IsUnitOnQuestByQuestID(questID, "party"..j) ) then
+					partyMembersOnQuest = partyMembersOnQuest + 1;
+				end
+			end
+			
+			if ( partyMembersOnQuest > 0 ) then
+				title = "["..partyMembersOnQuest.."] "..title;
+			end
+
+			button.Text:SetText(title);
+			button.Text:SetTextColor( difficultyColor.r, difficultyColor.g, difficultyColor.b );
+			
+			totalHeight = totalHeight + button.Text:GetHeight();
+			if ( IsQuestHardWatched(questLogIndex) ) then
+				button.Check:Show();
+				button.Check:SetPoint("LEFT", button.Text, button.Text:GetWrappedWidth() + 2, 0);
+			else
+				button.Check:Hide();
+			end
+			
+			-- tag. daily icon can be alone or before other icons except for COMPLETED or FAILED
+			local tagID;
+			local questTagID, tagName = GetQuestTagInfo(questID);
+			if ( isComplete and isComplete < 0 ) then
+				tagID = "FAILED";
+			elseif ( isComplete and isComplete > 0 ) then
+				tagID = "COMPLETED";
+			elseif( questTagID and questTagID == QUEST_TAG_ACCOUNT ) then
+				local factionGroup = GetQuestFactionGroup(questID);
+				if( factionGroup ) then
+					tagID = "ALLIANCE";
+					if ( factionGroup == LE_QUEST_FACTION_HORDE ) then
+						tagID = "HORDE";
+					end
+				else
+					tagID = QUEST_TAG_ACCOUNT;
+				end
+			elseif( frequency == LE_QUEST_FREQUENCY_DAILY and (not isComplete or isComplete == 0) ) then
+				tagID = "DAILY";
+			elseif( frequency == LE_QUEST_FREQUENCY_WEEKLY and (not isComplete or isComplete == 0) )then
+				tagID = "WEEKLY";
+			elseif( questTagID ) then
+				tagID = questTagID;
+			end
+
+			if ( tagID ) then
+				local tagCoords = QUEST_TAG_TCOORDS[tagID];
+				if( tagCoords ) then
+					button.TagTexture:SetTexCoord( unpack(tagCoords) );
+					button.TagTexture:Show();
+				end
+			else
+				button.TagTexture:Hide();
+			end
+			
+			-- POI/objectives
+			if ( showQuestObjectives ) then			
+				local requiredMoney = GetQuestLogRequiredMoney(questLogIndex);
+				local numObjectives = GetNumQuestLeaderBoards(questLogIndex);
+				-- complete?
+				local isBreadcrumb = false;		
+				if ( isComplete and isComplete < 0 ) then
+					isComplete = false;
+				elseif ( numObjectives == 0 and playerMoney >= requiredMoney and not startEvent) then
+					isComplete = true;
+					if ( requiredMoney == 0 ) then
+						isBreadcrumb = true;
+					end
+				end
+				-- objectives
+				if ( isComplete ) then
+					objectiveIndex = objectiveIndex + 1;
+					local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
+					objectiveFrame.questID = questID;
+					objectiveFrame:Show();
+					if ( isBreadcrumb ) then
+						objectiveFrame.Text:SetText(GetQuestLogCompletionText(questLogIndex));
+					else
+						objectiveFrame.Text:SetText(QUEST_WATCH_QUEST_READY);
+					end
+					local height = objectiveFrame.Text:GetStringHeight();
+					objectiveFrame:SetHeight(height);
+					objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
+					totalHeight = totalHeight + height + 3;						
+				else	
+					local prevObjective;
+					for i = 1, numObjectives do
+						local text, objectiveType, finished = GetQuestLogLeaderBoard(i, questLogIndex);
+						if ( text and not finished ) then
+							objectiveIndex = objectiveIndex + 1;
+							local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
+							objectiveFrame.questID = questID;
+							objectiveFrame:Show();
+							objectiveFrame.Text:SetText(text);
+							local height = objectiveFrame.Text:GetStringHeight();
+							objectiveFrame:SetHeight(height);
+							if ( prevObjective ) then
+								objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
+								height = height + 2;
+							else
+								objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
+								height = height + 3;
+							end
+							totalHeight = totalHeight + height;								
+							prevObjective = objectiveFrame;
+						end
+					end
+					if ( requiredMoney > playerMoney ) then
+						objectiveIndex = objectiveIndex + 1;
+						local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
+						objectiveFrame.questID = questID;
+						objectiveFrame:Show();
+						objectiveFrame.Text:SetText(GetMoneyString(playerMoney).." / "..GetMoneyString(requiredMoney));
+						local height = objectiveFrame.Text:GetStringHeight();
+						objectiveFrame:SetHeight(height);
+						if ( prevObjective ) then
+							objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
+							height = height + 2;
+						else
+							objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
+							height = height + 3;
+						end
+						totalHeight = totalHeight + height;
+					end
+				end
+				-- POI
+				if ( hasLocalPOI and showPOIs ) then			
+					local poiButton;
+					if ( isComplete ) then
+						poiButton = QuestPOI_GetButton(QuestScrollFrame.Contents, questID, "normal", nil, isStory);
+					else
+						for i = 1, #poiTable do
+							if ( poiTable[i] == questID ) then
+								poiButton = QuestPOI_GetButton(QuestScrollFrame.Contents, questID, "numeric", i, isStory);
+								break;
+							end
+						end
+					end
+					if ( poiButton ) then
+						poiButton:SetPoint("TOPLEFT", button, 6, -4);
+						poiButton:SetFrameLevel(poiFrameLevel);
+						poiButton.parent = button;
+					end
+					-- extra room because of POI icon
+					totalHeight = totalHeight + 6;
+					button.Text:SetPoint("TOPLEFT", 31, -8);
+				else
+					button.Text:SetPoint("TOPLEFT", 31, -4);
+				end
+			else
+				button.Text:SetPoint("TOPLEFT", 31, -4);
+			end
+			button:SetHeight(totalHeight);
+			button.questLogIndex = questLogIndex;
+			button:ClearAllPoints();
+			if ( prevButton ) then
+				button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
+			else
+				button:SetPoint("TOPLEFT", 1, -6);
+			end
+			button:Show();			
+			prevButton = button;
+		end
+	end
+
+	-- if we have quests for this map, move them up
+	if ( firstLocalQuestButton ) then
+		local _, origAnchor = firstLocalQuestButton:GetPoint();
+		-- if it's the last header, it will be the last quest button
+		local lastQuestButton;		
+		if ( firstNextQuestButton ) then
+			_, lastQuestButton = firstNextQuestButton:GetPoint();		
+		else
+			lastQuestButton = QuestLogQuests_GetTitleButton(titleIndex);
+		end
+		-- now rearrange
+		if ( storyID ) then
+			firstLocalQuestButton:SetPoint("TOPLEFT", QuestScrollFrame.Contents.StoryHeader, "BOTTOMLEFT", 0, 0);
+		else
+			firstLocalQuestButton:SetPoint("TOPLEFT", 1, -6);
+		end
+		QuestLogQuests_GetTitleButton(1):SetPoint("TOPLEFT", lastQuestButton, "BOTTOMLEFT", 0, 0);
+		if ( firstNextQuestButton ) then
+			firstNextQuestButton:SetPoint("TOPLEFT", origAnchor, "BOTTOMLEFT", 0, 0);
+		end	
+	end
+
+	-- background
+	if ( titleIndex > 0 ) then
+		QuestScrollFrame.Background:SetAtlas("QuestLogBackground", true);
+	else
+		QuestScrollFrame.Background:SetAtlas("NoQuestsBackground", true);
+	end
+	
+	QuestPOI_SelectButtonByQuestID(QuestScrollFrame.Contents, GetSuperTrackedQuestID());
+
   end
-  KU_orig_QuestLogQuests_Update(poiTable);
-  ENABLE_COLORBLIND_MODE = old_mode;
 end
 
 local function KU_GetScreenHeight(col)
@@ -785,11 +1092,6 @@ local function KU_SetNewLevel(printmsg)
     then
       KU_ChatPrint(KU_CHAT_LEVEL_ON);
     end
-    if(KU_orig_QuestLogQuests_Update == nil) -- Never hooked
-    then
-      KU_orig_QuestLogQuests_Update = QuestLogQuests_Update;
-      QuestLogQuests_Update = KU_QuestLogQuests_Update32;
-    end
     KU_ShowQuestLevels = true;
   else
     if(printmsg)
@@ -799,6 +1101,8 @@ local function KU_SetNewLevel(printmsg)
     KU_ShowQuestLevels = false;
   end
 end
+
+hooksecurefunc("QuestLogQuests_Update",KU_QuestLogQuests_Update)
 
 local function KU_SetNewSwapIdol(printmsg)
   if(KU_GetToonConfig("SwapIdol"))
@@ -3157,29 +3461,6 @@ function KU_CapDisplayOfNumericValue(value)
   return retString;
 end
 
-function KU_TextStatusBar_UpdateTextString(textStatusBar)
-  if((textStatusBar == TargetFrameHealthBar or textStatusBar == TargetFrameManaBar or textStatusBar == FocusFrameHealthBar or textStatusBar == Boss1TargetFrameHealthBar or textStatusBar == Boss2TargetFrameHealthBar or textStatusBar == Boss3TargetFrameHealthBar or textStatusBar == Boss4TargetFrameHealthBar)
-      and KU_GetToonConfig("ShowPercent"))
-  then
-    local textString = textStatusBar.TextString;
-    if(textString) then
-      local value = textStatusBar:GetValue();
-      local valueMin, valueMax = textStatusBar:GetMinMaxValues();
-      if ( ( tonumber(valueMax) ~= valueMax or valueMax > 0 ) and not ( textStatusBar.pauseUpdates ) ) then
-        if (( value and valueMax > 0 and ( GetCVarBool("statusTextPercentage") or textStatusBar.showPercentage ) ) or ( value == 0 and textStatusBar.zeroText )) then
-          return;
-        end
-        local percent = tostring(math.ceil((value / valueMax) * 100)) .. "%";
-        value = KU_CapDisplayOfNumericValue(value);
-        valueMax = KU_CapDisplayOfNumericValue(valueMax);
-        textString:SetText(value.."/"..valueMax.." ("..percent..")");
-      end
-    end
-  end
-end
-
---hooksecurefunc("TextStatusBar_UpdateTextString",KU_TextStatusBar_UpdateTextString);
-
 function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, value, valueMin, valueMax)
 	local fname = statusFrame:GetName();
 	if( (strfind(fname,"FrameHealthBar") or strfind(fname,"FrameManaBar")) and KU_GetToonConfig("ShowPercent") )
@@ -3187,13 +3468,8 @@ function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, va
 		if ( ( tonumber(valueMax) ~= valueMax or valueMax > 0 ) and not ( statusFrame.pauseUpdates ) ) then
 			local valueDisplay = value;
 			local valueMaxDisplay = valueMax;
-			if ( statusFrame.capNumericDisplay ) then
-				valueDisplay = AbbreviateLargeNumbers(value);
-				valueMaxDisplay = AbbreviateLargeNumbers(valueMax);
-			else
-				valueDisplay = BreakUpLargeNumbers(value);
-				valueMaxDisplay = BreakUpLargeNumbers(valueMax);
-			end
+			valueDisplay = KU_CapDisplayOfNumericValue(value);
+			valueMaxDisplay = KU_CapDisplayOfNumericValue(valueMax);
 
 			local textDisplay = GetCVar("statusTextDisplay");
 			if ( textDisplay ~= "NUMERIC" or statusFrame.showPercentage ) or ( value == 0 and statusFrame.zeroText ) then
@@ -3202,7 +3478,7 @@ function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, va
 				statusFrame.isZero = nil;
 				local percent = tostring(math.ceil((value / valueMax) * 100)) .. "%";
 				if ( statusFrame.prefix and (statusFrame.alwaysPrefix or not (statusFrame.cvar and GetCVar(statusFrame.cvar) == "1" and statusFrame.textLockable) ) ) then
-					textString:SetText(statusFrame.prefix.." "..valueDisplay.." / "..valueMaxDisplay.." ("..percent..")");
+					textString:SetText(statusFrame.prefix.." "..valueDisplay.."/"..valueMaxDisplay.." ("..percent..")");
 				else
 					textString:SetText(valueDisplay.." / "..valueMaxDisplay.." ("..percent..")");
 				end
