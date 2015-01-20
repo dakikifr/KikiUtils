@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.4
+    Version 9.5
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -108,6 +108,8 @@ Kiki Utils by Kiki
        - Jan, 4th 2015: Added SpeedOfLight to auto-travel key
       - 9.4:
        - Jan, 19th 2015: Attempt to fix Taint issues
+      - 9.5:
+       - Jan, 20th 2015: Added 'Leave Vehicle' to auto-travel key
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -3163,7 +3165,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
 	  macrotext = macrotext .. "/cast [nomounted]"..spd_of_light.."\n";
 	end
   end
-  macrotext = macrotext .. "/dismount [mounted]";
+  macrotext = macrotext .. "/dismount [mounted]\n/leavevehicle [canexitvehicle]";
   if(string.len(macrotext) > 255)
   then
     kud("KikiUtils Mount Macro too long!! ("..string.len(macrotext)..")");
