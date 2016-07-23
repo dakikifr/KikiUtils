@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.5
+    Version 9.7
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -110,6 +110,10 @@ Kiki Utils by Kiki
        - Jan, 19th 2015: Attempt to fix Taint issues
       - 9.5:
        - Jan, 20th 2015: Added 'Leave Vehicle' to auto-travel key
+      - 9.6:
+       - Feb, 4th 2015: Added Tiger's Lust to auto-travel key
+      - 9.7:
+       - Jul, 23th 2016: Fixed for WoW 7.0
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -3083,6 +3087,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
   local flyable_add = "";
   local swim_add = "";
   local roll_name = nil;
+  local tiget_lust = nil;
   
   if(KU_FlyableZone()) -- Must detect flyable myself, since [flyable] macro conditionnal returns "true" in northrend if lvl < 77
   then
@@ -3112,6 +3117,11 @@ local function _KU_CreateMountMacros(landmount,flymount)
   if(KU_IsMonk)
   then
     roll_name = GetSpellInfo(109132); -- Roll
+	local has_tl,tl_name = KU_HasSpell(116841); -- Tiger's Lust
+	if(has_tl)
+	then
+	  tiget_lust = tl_name;
+	end
   end
 
   -- OOC Macro
@@ -3137,7 +3147,12 @@ local function _KU_CreateMountMacros(landmount,flymount)
   end
   if(roll_name)
   then
-    macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
+    if(tiget_lust)
+	then
+      macrotext = macrotext .. "/castsequence [nomounted] reset=10 "..tiget_lust..","..roll_name..","..roll_name..","..roll_name.."\n";
+	else
+      macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
+	end
   end
   if(ghost)
   then

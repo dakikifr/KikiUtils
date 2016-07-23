@@ -1,7 +1,7 @@
-## Interface: 60000
+## Interface: 70000
 ## Title: Kiki Utils
 ## Author: Kiki From European Conseil des Ombres
-## Version: 9.5
+## Version: 9.7
 ## Notes: Useful script functions, DAoC like MouseLook, RandomMount, and more
 ## Notes-frFR: Fonctions pratiques pour les scripts, mode vue-souris comme DAoC, montures aléatoires, et plus encore
 ## OptionalDeps: sct, AlreadyKilled, BankItems, MikScrollingBattleText
