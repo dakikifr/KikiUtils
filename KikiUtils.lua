@@ -114,6 +114,8 @@ Kiki Utils by Kiki
        - Feb, 4th 2015: Added Tiger's Lust to auto-travel key
       - 9.7:
        - Jul, 23th 2016: Fixed for WoW 7.0
+	  - 9.8:
+	   - Oct, 15th 2016: Many fixes
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -212,11 +214,11 @@ local pendingSetupForceAttackMacro = false;
 local pendingSetupBindings = false;
 local KU_ShowQuestLevels = false;
 local KU_SubZoneRegistered = false;
-local KU_ActiveTalents = nil;
 local KU_ActiveTree = nil;
 local KU_MustRestoreMusic = false;
 local KU_FROSTWOLF_WAR_WOLF_SPELLID = 164222;
 local KU_SPEED_OF_LIGHT_SPELLID = 85499;
+local KU_DIVINE_STEED_SPELLID = 190784;
 
 local strfind = string.find;
 local strupper = string.upper;
@@ -322,9 +324,7 @@ function KU_QuestLogQuests_Update(poiTable)
 	local showPOIs = GetCVarBool("questPOI");
 
 	local mapID, isContinent = GetCurrentMapAreaID();
-	local showQuestObjectives = (not isContinent) and (mapID > 0);
 	
-	local mapHeaderIndex = GetCurrentMapHeaderIndex();
 	local button, prevButton;
 	
 	QuestPOI_ResetUsage(QuestScrollFrame.Contents);
@@ -343,56 +343,49 @@ function KU_QuestLogQuests_Update(poiTable)
 				completedCriteria = completedCriteria + 1;
 			end
 		end
+		local numPoints = select(3, GetAchievementInfo(storyID));
+		QuestScrollFrame.Contents.StoryHeader.Points:SetText(numPoints);
 		QuestScrollFrame.Contents.StoryHeader.Progress:SetFormattedText(QUEST_STORY_STATUS, completedCriteria, numCriteria);
-		if ( mapHeaderIndex > 0 ) then
-			-- always expand header for story zone
-			local _, _, _, _, isCollapsed = GetQuestLogTitle(mapHeaderIndex);
-			if ( isCollapsed ) then
-				-- ExpandQuestHeader will signal QUEST_LOG_UPDATE which would otherwise trigger another QuestLogQuests_Update
-				QuestMapFrame.ignoreQuestLogUpdate = true;
-				ExpandQuestHeader(mapHeaderIndex);
-				QuestMapFrame.ignoreQuestLogUpdate = nil;
-			end
-		end
 		prevButton = QuestScrollFrame.Contents.StoryHeader;
 	else
 		QuestScrollFrame.Contents.StoryHeader:Hide();
 	end
 
-	local localQuestsGroup;
-	local firstLocalQuestButton;
-	local nextQuestsGroup;
-	local firstNextQuestButton;
-
 	local headerIndex = 0;
 	local titleIndex = 0;
 	local objectiveIndex = 0;
+	local headerCollapsed = false;
 	local headerTitle, headerOnMap, headerShown, headerLogIndex, mapHeaderButtonIndex;
+	local noHeaders = true;
 	for questLogIndex = 1, numEntries do
-		local title, level, suggestedGroup, isHeader, isCollapsed, isComplete, frequency, questID, startEvent, displayQuestID, isOnMap, hasLocalPOI, isTask, isStory = GetQuestLogTitle(questLogIndex);	
+		local title, level, suggestedGroup, isHeader, isCollapsed, isComplete, frequency, questID, startEvent, displayQuestID, isOnMap, hasLocalPOI, isTask, isBounty, isStory = GetQuestLogTitle(questLogIndex);
 		local difficultyColor = GetQuestDifficultyColor(level);
 		if ( isHeader ) then
 			headerTitle = title;
 			headerOnMap = isOnMap;
 			headerShown = false;
 			headerLogIndex = questLogIndex;
+			headerCollapsed = isCollapsed;
 			difficultyColor = QuestDifficultyColors["header"];
-			if ( questLogIndex == mapHeaderIndex ) then
-				localQuestsGroup = true;
-			elseif ( localQuestsGroup ) then
-				localQuestsGroup = false;
-				nextQuestsGroup = true;
-			end
-		elseif ( headerOnMap and isOnMap and not isTask ) then
+		elseif ( not isTask and (not isBounty or IsQuestComplete(questID))) then
 			-- we have at least one valid entry, show the header for it
-			if ( not headerShown and not showQuestObjectives ) then
+			if ( not headerShown ) then
 				headerShown = true;
+				noHeaders = false;
 				headerIndex = headerIndex + 1;
 				button = QuestLogQuests_GetHeaderButton(headerIndex);
+				if (headerCollapsed) then
+					button:SetNormalTexture("Interface\\Buttons\\UI-PlusButton-Up");
+				else
+					button:SetNormalTexture("Interface\\Buttons\\UI-MinusButton-Up");
+				end
+				button:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight");
 				if ( headerTitle ) then
 					button:SetText(headerTitle);
+					button:SetHitRectInsets(0, -button.ButtonText:GetWidth(), 0, 0);
 				else
 					button:SetText("");
+					button:SetHitRectInsets(0, 0, 0, 0);
 				end
 				--button:ClearAllPoints();
 				--if ( prevButton ) then
@@ -401,106 +394,87 @@ function KU_QuestLogQuests_Update(poiTable)
 					--button:SetPoint("TOPLEFT", 1, -6);
 				--end
 				--button:Show();				
-				if ( mapHeaderIndex == headerLogIndex ) then
-					mapHeaderButtonIndex = headerIndex;
-				end
 				--button.questLogIndex = headerLogIndex;
 				prevButton = button;
 			end
 
-			local totalHeight = 8;
-			titleIndex = titleIndex + 1;
-			button = QuestLogQuests_GetTitleButton(titleIndex);
-			--button.questID = questID;
+			if (not headerCollapsed) then
+				local totalHeight = 8;
+				titleIndex = titleIndex + 1;
+				button = QuestLogQuests_GetTitleButton(titleIndex);
+				--button.questID = questID;
 
-			if ( localQuestsGroup and not firstLocalQuestButton ) then
-				if ( titleIndex > 1 ) then
-					firstLocalQuestButton = button;
+				if ( displayQuestID ) then
+					title = questID.." - "..title;
+				end
+				title = "["..level.."] " .. title;
+			
+				-- If not a header see if any nearby group mates are on this quest
+				local partyMembersOnQuest = 0;
+				for j=1, GetNumSubgroupMembers() do
+					if ( IsUnitOnQuestByQuestID(questID, "party"..j) ) then
+						partyMembersOnQuest = partyMembersOnQuest + 1;
+					end
+				end
+			
+				if ( partyMembersOnQuest > 0 ) then
+					title = "["..partyMembersOnQuest.."] "..title;
+				end
+
+				button.Text:SetText(title);
+				--button.Text:SetTextColor( difficultyColor.r, difficultyColor.g, difficultyColor.b );
+			
+				totalHeight = totalHeight + button.Text:GetHeight();
+				if ( IsQuestHardWatched(questLogIndex) ) then
+					button.Check:Show();
+					button.Check:SetPoint("LEFT", button.Text, button.Text:GetWrappedWidth() + 2, 0);
 				else
-					-- no need to move this group of quests, it's already at the top
-					localQuestsGroup = nil;
+					button.Check:Hide();
 				end
-			end
-			if ( nextQuestsGroup and not firstNextQuestButton ) then
-				firstNextQuestButton = button;
-			end
-
-			if ( displayQuestID ) then
-				title = questID.." - "..title;
-			end
-			title = "["..level.."] " .. title;
 			
-			-- If not a header see if any nearby group mates are on this quest
-			local partyMembersOnQuest = 0;
-			for j=1, GetNumSubgroupMembers() do
-				if ( IsUnitOnQuestByQuestID(questID, "party"..j) ) then
-					partyMembersOnQuest = partyMembersOnQuest + 1;
+				-- tag. daily icon can be alone or before other icons except for COMPLETED or FAILED
+				--[[local tagID;
+				local questTagID, tagName = GetQuestTagInfo(questID);
+				if ( isComplete and isComplete < 0 ) then
+					tagID = "FAILED";
+				elseif ( isComplete and isComplete > 0 ) then
+					tagID = "COMPLETED";
+				elseif( questTagID and questTagID == QUEST_TAG_ACCOUNT ) then
+					local factionGroup = GetQuestFactionGroup(questID);
+					if( factionGroup ) then
+						tagID = "ALLIANCE";
+						if ( factionGroup == LE_QUEST_FACTION_HORDE ) then
+							tagID = "HORDE";
+						end
+					else
+						tagID = QUEST_TAG_ACCOUNT;
+					end
+				elseif( frequency == LE_QUEST_FREQUENCY_DAILY and (not isComplete or isComplete == 0) ) then
+					tagID = "DAILY";
+				elseif( frequency == LE_QUEST_FREQUENCY_WEEKLY and (not isComplete or isComplete == 0) )then
+					tagID = "WEEKLY";
+				elseif( questTagID ) then
+					tagID = questTagID;
 				end
-			end
-			
-			if ( partyMembersOnQuest > 0 ) then
-				title = "["..partyMembersOnQuest.."] "..title;
-			end
 
-			button.Text:SetText(title);
-			--button.Text:SetTextColor( difficultyColor.r, difficultyColor.g, difficultyColor.b );
-			
-			totalHeight = totalHeight + button.Text:GetHeight();
-			if ( IsQuestHardWatched(questLogIndex) ) then
-				button.Check:Show();
-				button.Check:SetPoint("LEFT", button.Text, button.Text:GetWrappedWidth() + 2, 0);
-			else
-				button.Check:Hide();
-			end
-			
-			-- tag. daily icon can be alone or before other icons except for COMPLETED or FAILED
-			--[[local tagID;
-			local questTagID, tagName = GetQuestTagInfo(questID);
-			if ( isComplete and isComplete < 0 ) then
-				tagID = "FAILED";
-			elseif ( isComplete and isComplete > 0 ) then
-				tagID = "COMPLETED";
-			elseif( questTagID and questTagID == QUEST_TAG_ACCOUNT ) then
-				local factionGroup = GetQuestFactionGroup(questID);
-				if( factionGroup ) then
-					tagID = "ALLIANCE";
-					if ( factionGroup == LE_QUEST_FACTION_HORDE ) then
-						tagID = "HORDE";
+				if ( tagID ) then
+					local tagCoords = QUEST_TAG_TCOORDS[tagID];
+					if( tagCoords ) then
+						button.TagTexture:SetTexCoord( unpack(tagCoords) );
+						button.TagTexture:Show();
 					end
 				else
-					tagID = QUEST_TAG_ACCOUNT;
-				end
-			elseif( frequency == LE_QUEST_FREQUENCY_DAILY and (not isComplete or isComplete == 0) ) then
-				tagID = "DAILY";
-			elseif( frequency == LE_QUEST_FREQUENCY_WEEKLY and (not isComplete or isComplete == 0) )then
-				tagID = "WEEKLY";
-			elseif( questTagID ) then
-				tagID = questTagID;
-			end
-
-			if ( tagID ) then
-				local tagCoords = QUEST_TAG_TCOORDS[tagID];
-				if( tagCoords ) then
-					button.TagTexture:SetTexCoord( unpack(tagCoords) );
-					button.TagTexture:Show();
-				end
-			else
-				button.TagTexture:Hide();
-			end]]
+					button.TagTexture:Hide();
+				end]]
 			
-			-- POI/objectives
-			if ( showQuestObjectives ) then			
+				-- POI/objectives
 				local requiredMoney = GetQuestLogRequiredMoney(questLogIndex);
 				local numObjectives = GetNumQuestLeaderBoards(questLogIndex);
 				-- complete?
-				local isBreadcrumb = false;		
 				if ( isComplete and isComplete < 0 ) then
 					isComplete = false;
 				elseif ( numObjectives == 0 and playerMoney >= requiredMoney and not startEvent) then
 					isComplete = true;
-					if ( requiredMoney == 0 ) then
-						isBreadcrumb = true;
-					end
 				end
 				-- objectives
 				if ( isComplete ) then
@@ -508,11 +482,8 @@ function KU_QuestLogQuests_Update(poiTable)
 					local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
 					--objectiveFrame.questID = questID;
 					--objectiveFrame:Show();
-					--[[if ( isBreadcrumb ) then
-						objectiveFrame.Text:SetText(GetQuestLogCompletionText(questLogIndex));
-					else
-						objectiveFrame.Text:SetText(QUEST_WATCH_QUEST_READY);
-					end]]
+					local completionText = GetQuestLogCompletionText(questLogIndex) or QUEST_WATCH_QUEST_READY;
+					--objectiveFrame.Text:SetText(completionText);
 					local height = objectiveFrame.Text:GetStringHeight();
 					--objectiveFrame:SetHeight(height);
 					--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
@@ -582,49 +553,25 @@ function KU_QuestLogQuests_Update(poiTable)
 				--[[else
 					button.Text:SetPoint("TOPLEFT", 31, -4);]]
 				end
-			--[[else
-				button.Text:SetPoint("TOPLEFT", 31, -4);]]
+				button:SetHeight(totalHeight);
+				--button.questLogIndex = questLogIndex;
+				--[[button:ClearAllPoints();
+				if ( prevButton ) then
+					button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
+				else
+					button:SetPoint("TOPLEFT", 1, -6);
+				end
+				button:Show();]]
+				prevButton = button;
 			end
-			button:SetHeight(totalHeight);
-			--button.questLogIndex = questLogIndex;
-			--[[button:ClearAllPoints();
-			if ( prevButton ) then
-				button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
-			else
-				button:SetPoint("TOPLEFT", 1, -6);
-			end
-			button:Show();]]
-			prevButton = button;
 		end
-	end
-
-	-- if we have quests for this map, move them up
-	if ( firstLocalQuestButton ) then
-		local _, origAnchor = firstLocalQuestButton:GetPoint();
-		-- if it's the last header, it will be the last quest button
-		local lastQuestButton;		
-		if ( firstNextQuestButton ) then
-			_, lastQuestButton = firstNextQuestButton:GetPoint();		
-		else
-			lastQuestButton = QuestLogQuests_GetTitleButton(titleIndex);
-		end
-		-- now rearrange
-		--[[if ( storyID ) then
-			firstLocalQuestButton:SetPoint("TOPLEFT", QuestScrollFrame.Contents.StoryHeader, "BOTTOMLEFT", 0, 0);
-		else
-			firstLocalQuestButton:SetPoint("TOPLEFT", 1, -6);
-		end
-		QuestLogQuests_GetTitleButton(1):SetPoint("TOPLEFT", lastQuestButton, "BOTTOMLEFT", 0, 0);
-		if ( firstNextQuestButton ) then
-			firstNextQuestButton:SetPoint("TOPLEFT", origAnchor, "BOTTOMLEFT", 0, 0);
-		end	]]
 	end
 
 	-- background
-	if ( titleIndex > 0 ) then
-		QuestScrollFrame.Background:SetAtlas("QuestLogBackground", true);
-	else
+	if ( titleIndex == 0 and noHeaders ) then
 		QuestScrollFrame.Background:SetAtlas("NoQuestsBackground", true);
+	else
+		QuestScrollFrame.Background:SetAtlas("QuestLogBackground", true);
 	end
 	
 	QuestPOI_SelectButtonByQuestID(QuestScrollFrame.Contents, GetSuperTrackedQuestID());
@@ -739,7 +686,7 @@ local function KU_CheckTalentSpec()
     return;
   end
   local tree = GetSpecialization();
-  if(KU_ActiveTalents == nil) -- First time
+  if(KU_ActiveTree == nil) -- First time
   then
     if(not tree or tree == 0) -- To prevent Bliz bug (PLAYER_TALENT_UPDATE is triggered when you zone)
     then
@@ -747,12 +694,8 @@ local function KU_CheckTalentSpec()
     end
   end
 
-  local group = GetActiveSpecGroup();
-
-  if(KU_ActiveTalents ~= group) -- First time, or spec changed
+  if(KU_ActiveTree ~= tree) -- First time, or spec changed
   then
-    -- Update active talent variable
-    KU_ActiveTalents = group;
     -- Get player's spec
     KU_ActiveTree = tree;
     -- Setup new bindings
@@ -1078,21 +1021,6 @@ local function KU_SetNewBags(printmsg)
   end
 end
 
-local function KU_SetNewAuras(printmsg)
-  if(KU_GetToonConfig("CheckAuras"))
-  then
-    if(printmsg)
-    then
-      KU_ChatPrint("Auras checking ON");
-    end
-  else
-    if(printmsg)
-    then
-      KU_ChatPrint("Auras checking OFF");
-    end
-  end
-end
-
 local function KU_SetNewLevel(printmsg)
   if(KU_GetToonConfig("QuestLevel"))
   then
@@ -1399,9 +1327,6 @@ local function KU_Commands(command)
       end
     end
     KU_SetNewBags(true);
-  elseif(cmd == "auras")
-  then
-    KU_Commands_ParamParse(param,"auras","CheckAuras",KU_SetNewAuras);
   elseif(cmd == "msbtarea")
   then
     if((param == "") or (param == nil))
@@ -2398,70 +2323,6 @@ function KikiUtils_OnEvent(self,event,...)
   then
     KU_IS_COMBAT = 1;
     KU_CheckDisableMusic();
-    if(KU_GetToonConfig("CheckAuras"))
-    then
-      -- Global
-      local resi = KU_GetResilience();
-      if(resi >= 500 and KU_IsInPvEInstance())
-      then
-        KU_Announce("WARNING: Resilience armor in PvE instance!",1,0,0);
-      end
-      -- Class specific
-      if(KU_IsPaladin)
-      then
-        -- Check AURA
-        local form = GetShapeshiftForm();
-        if(form == 0) -- No Aura!
-        then
-          KU_Announce("WARNING: No active aura!",1,0,0);
-        end
-        -- If in Raid and in Crusader aura
-        if(KU_IsInPvEInstance() and form == 7)
-        then
-          KU_Announce("WARNING: Cursader aura active!",1,0,0);
-        end
-        -- Check No Fury on Tank
-        if(GetSpecialization() == 2 and KU_NoRighteousFuryInPveInstance())
-        then
-          local _,fury_name = KU_HasSpell(25780);
-          KU_Announce("WARNING: "..fury_name.." not active!",1,0,0);
-        end
-        -- Check SEAL
-        local seal_name = KU_HasSealOfCommandActiveInPveInstance();
-        if(seal_name)
-        then
-          if(UnitExists("target") and UnitCanAttack("player","target") and UnitLevel("target") == -1)
-          then
-            KU_Announce("WARNING: "..seal_name.." active on a boss!",1,0,0);
-          else -- Schedule check for later
-            KU_CHECK_PALADIN_SEAL = 1;
-          end
-        end
-      elseif(KU_IsDK)
-      then
-        -- Check PRESENCE
-        local form = GetShapeshiftForm();
-        if(form == 0) -- No Presence!
-        then
-          KU_Announce("WARNING: No active presence!",1,0,0);
-          return;
-        end
-        -- Check No Blood on Tank
-        if(GetSpecialization() == 1 and KU_NoBloodPresenceInPveInstance() and not KU_HasRoleNotTank())
-        then
-          local _,blood_name = KU_HasSpell(48263);
-          KU_Announce("WARNING: "..blood_name.." not active!",1,0,0);
-        end
-      elseif(KU_IsWar)
-      then
-        -- Check Stance
-        if(GetSpecialization() == 3 and KU_NoDefensiveStanceInPveInstance())
-        then
-          local _,def_name = KU_HasSpell(71);
-          KU_Announce("WARNING: "..def_name.." not active!",1,0,0);
-        end
-      end
-    end
   elseif(event == "PLAYER_REGEN_ENABLED")
   then
     KU_IS_COMBAT = 0;
@@ -2543,19 +2404,6 @@ function KikiUtils_OnEvent(self,event,...)
   elseif(event == "PLAYER_TALENT_UPDATE") -- Warning: This event is triggered when you zone (but inbetween PLAYER_LEAVING_WORLD and PLAYER_ENTERING_WORLD)
   then
     KU_CheckTalentSpec();
-  --[[elseif(event == "UNIT_POWER_BAR_SHOW")
-  then
-    self:RegisterEvent("UNIT_POWER");
-  elseif(event == "UNIT_POWER_BAR_HIDE")
-  then
-    self:UnregisterEvent("UNIT_POWER");
-  elseif(event == "UNIT_POWER")
-  then
-    local unit,typ = ...;
-    if(unit == "player" and typ == "ALTERNATE")
-    then
-      KU_PlayerPowerBarAltOverlayName:SetText(UnitPower(unit,ALTERNATE_POWER_INDEX));
-    end]]
   end
 end
 
@@ -2925,6 +2773,12 @@ function KU_ClearBindings()
 end
 
 function KU_BindingsSetKeys()
+  if(InCombatLockdown())
+  then
+    pendingSetupBindings = true;
+	return;
+  end
+
   local binds = KU_GetBindings();
   local button;
 
@@ -3066,9 +2920,12 @@ local function KU_FlyableZone()
     -- Now, must check zone
     if(KU_CurrentZone == KU_ZONE_WINTERGRASP)
     then
-      return GetWintergraspWaitTime() ~= nil;
+      return GetOutdoorPVPWaitTime() ~= nil;
     end
     return true; -- Flyable everywhere else in northrend
+  elseif(continent == 8) -- Broken Isles
+  then
+    return false;
   elseif(continent == -1) -- Instance
   then
     return false;
@@ -3087,7 +2944,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
   local flyable_add = "";
   local swim_add = "";
   local roll_name = nil;
-  local tiget_lust = nil;
+  local tiger_lust = nil;
   
   if(KU_FlyableZone()) -- Must detect flyable myself, since [flyable] macro conditionnal returns "true" in northrend if lvl < 77
   then
@@ -3120,10 +2977,10 @@ local function _KU_CreateMountMacros(landmount,flymount)
 	local has_tl,tl_name = KU_HasSpell(116841); -- Tiger's Lust
 	if(has_tl)
 	then
-	  tiget_lust = tl_name;
+	  tiger_lust = tl_name;
 	end
   end
-
+  
   -- OOC Macro
   macrotext = "";
   if(landmount)
@@ -3147,9 +3004,9 @@ local function _KU_CreateMountMacros(landmount,flymount)
   end
   if(roll_name)
   then
-    if(tiget_lust)
+    if(tiger_lust)
 	then
-      macrotext = macrotext .. "/castsequence [nomounted] reset=10 "..tiget_lust..","..roll_name..","..roll_name..","..roll_name.."\n";
+      macrotext = macrotext .. "/castsequence [nomounted] reset=10 "..tiger_lust..","..roll_name..","..roll_name..","..roll_name.."\n";
 	else
       macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
 	end
@@ -3178,6 +3035,11 @@ local function _KU_CreateMountMacros(landmount,flymount)
     if(spd_of_light)
 	then
 	  macrotext = macrotext .. "/cast [nomounted]"..spd_of_light.."\n";
+	end
+    local has_steed,steed_name = KU_HasSpell(KU_DIVINE_STEED_SPELLID); -- Divine Steed
+	if(has_steed)
+	then
+	  macrotext = macrotext .. "/cast [nomounted]"..steed_name.."\n";
 	end
   end
   macrotext = macrotext .. "/dismount [mounted]\n/leavevehicle [canexitvehicle]";
@@ -3373,8 +3235,14 @@ local function KikiUtils_SetupCureButton(button,name,key_name,spellID)
   if(key2) then
     SetOverrideBindingClick(button, false, key2,button:GetName());
   end
-  button:SetAttribute("type","spell");
-  button:SetAttribute("spell",GetSpellInfo(spellID));
+  if(type(spellID) == "number")
+  then
+    button:SetAttribute("type","spell");
+    button:SetAttribute("spell",GetSpellInfo(spellID));
+  else
+    button:SetAttribute("type","macro");
+    button:SetAttribute("macrotext",spellID);
+  end
 end
 
 local function KikiUtils_SetupCure()
@@ -3390,7 +3258,10 @@ local function KikiUtils_SetupCure()
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",475); -- Remove Curse (Curse)
   elseif(cls == "PALADIN")
   then
-    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",4987); -- Cleanse (Poison/Disease/Magic)
+    local holySpell = GetSpellInfo(4987) -- Cleanse
+    local otherSpell = GetSpellInfo(213644) -- Cleanse Toxins
+    local macroText = "/cast [spec:1] "..holySpell.." ; "..otherSpell;
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "MONK")
   then
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",115450); -- Detox (Poison/Disease)
@@ -3544,7 +3415,7 @@ function KU_HasSpell(spellID)
   if(name)
   then
     local n = GetSpellInfo(name); -- Returns info only if spell is in your spellbook
-    if(n)
+    if(n and name == n)
     then
       return true,n;
     end
