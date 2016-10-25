@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.7
+    Version 9.9
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -116,6 +116,8 @@ Kiki Utils by Kiki
        - Jul, 23th 2016: Fixed for WoW 7.0
 	  - 9.8:
 	   - Oct, 15th 2016: Many fixes
+	  - 9.9:
+	   - Oct, 26th 2016: Fixed invalid key binding after spec change
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -2797,6 +2799,8 @@ function KU_BindingsSetKeys()
       button:SetAttribute("type",infos.type);
       if(infos.unit ~= "none") then
         button:SetAttribute("unit",infos.unit);
+      else
+        button:SetAttribute("unit","");
       end
       if(infos.type == "spell") then
         button:SetAttribute("spell",infos.name);
