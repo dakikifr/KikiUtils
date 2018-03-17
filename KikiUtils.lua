@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 9.9
+    Version 10.0
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -118,6 +118,8 @@ Kiki Utils by Kiki
 	   - Oct, 15th 2016: Many fixes
 	  - 9.9:
 	   - Oct, 26th 2016: Fixed invalid key binding after spec change
+	  - 10.0:
+	   - June, 24th 2017: Fixed mount commands, spell command
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -1232,7 +1234,7 @@ local function KU_Commands(command)
     BattlefieldMinimap:Show();
   elseif(cmd == "spell")
   then
-    local _, _, _, spellid = strfind(param, "|c%x+|H(spell:(%d+))|h%[.-%]|h|r");
+    local _, _, _, spellid = strfind(param, "|c%x+|H(spell:(%d+):%d*)|h%[.-%]|h|r");
     if(spellid)
     then
       local name,link = GetSpellInfo(spellid);
@@ -1357,12 +1359,31 @@ local function KU_Commands(command)
       KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."addmount");
       return;
     end;
-    local param2 = strupper(param);
-    for i=1,GetNumCompanions("MOUNT")
+	-- Check if we passed a link
+	local passedName = nil;
+    local _, _, _, linkSpellID = strfind(param, "|c%x+|H(spell:(%d+):%d*)|h%[.-%]|h|r");
+    if(linkSpellID)
+	then
+		linkSpellID = tonumber(linkSpellID);
+	else
+		passedName = strupper(param);
+	end
+	local mountIDs = C_MountJournal.GetMountIDs();
+    for i, mountID in ipairs(mountIDs)
     do
-      local creatureID, creatureName, spellID, icon, active = GetCompanionInfo("MOUNT",i);
-      if(strfind(strupper(creatureName),param2))
+	  local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned = C_MountJournal.GetMountInfoByID(mountID);
+      if((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName),passedName)))
       then
+		if(not summonable)
+		then
+			KU_ChatPrint("This mount is not summonable by this character");
+			return;
+		end
+		if(not owned)
+		then
+			KU_ChatPrint("You do not owned this mount");
+			return;
+		end
         local mounts = KU_GetToonConfig("Mounts");
         if(not mounts)
         then
@@ -1389,12 +1410,31 @@ local function KU_Commands(command)
       KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."addflightmount");
       return;
     end;
-    local param2 = strupper(param);
-    for i=1,GetNumCompanions("MOUNT")
+	-- Check if we passed a link
+	local passedName = nil;
+    local _, _, _, linkSpellID = strfind(param, "|c%x+|H(spell:(%d+):%d*)|h%[.-%]|h|r");
+    if(linkSpellID)
+	then
+		linkSpellID = tonumber(linkSpellID);
+	else
+		passedName = strupper(param);
+	end
+	local mountIDs = C_MountJournal.GetMountIDs();
+    for i, mountID in ipairs(mountIDs)
     do
-      local creatureID, creatureName, spellID, icon, active = GetCompanionInfo("MOUNT",i);
-      if(strfind(strupper(creatureName),param2))
+	  local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned = C_MountJournal.GetMountInfoByID(mountID);
+      if((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName),passedName)))
       then
+		if(not summonable)
+		then
+			KU_ChatPrint("This mount is not summonable by this character");
+			return;
+		end
+		if(not owned)
+		then
+			KU_ChatPrint("You do not owned this mount");
+			return;
+		end
         local mounts = KU_GetToonConfig("FlightMounts");
         if(not mounts)
         then
@@ -1421,12 +1461,31 @@ local function KU_Commands(command)
       KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."addbgmount");
       return;
     end;
-    local param2 = strupper(param);
-    for i=1,GetNumCompanions("MOUNT")
+	-- Check if we passed a link
+	local passedName = nil;
+    local _, _, _, linkSpellID = strfind(param, "|c%x+|H(spell:(%d+):%d*)|h%[.-%]|h|r");
+    if(linkSpellID)
+	then
+		linkSpellID = tonumber(linkSpellID);
+	else
+		passedName = strupper(param);
+	end
+	local mountIDs = C_MountJournal.GetMountIDs();
+    for i, mountID in ipairs(mountIDs)
     do
-      local creatureID, creatureName, spellID, icon, active = GetCompanionInfo("MOUNT",i);
-      if(strfind(strupper(creatureName),param2))
+	  local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned = C_MountJournal.GetMountInfoByID(mountID);
+      if((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName),passedName)))
       then
+		if(not summonable)
+		then
+			KU_ChatPrint("This mount is not summonable by this character");
+			return;
+		end
+		if(not owned)
+		then
+			KU_ChatPrint("You do not owned this mount");
+			return;
+		end
         local mounts = KU_GetToonConfig("BGMounts");
         if(not mounts)
         then
@@ -1453,12 +1512,31 @@ local function KU_Commands(command)
       KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."addinstmount");
       return;
     end;
-    local param2 = strupper(param);
-    for i=1,GetNumCompanions("MOUNT")
+	-- Check if we passed a link
+	local passedName = nil;
+    local _, _, _, linkSpellID = strfind(param, "|c%x+|H(spell:(%d+):%d*)|h%[.-%]|h|r");
+    if(linkSpellID)
+	then
+		linkSpellID = tonumber(linkSpellID);
+	else
+		passedName = strupper(param);
+	end
+	local mountIDs = C_MountJournal.GetMountIDs();
+    for i, mountID in ipairs(mountIDs)
     do
-      local creatureID, creatureName, spellID, icon, active = GetCompanionInfo("MOUNT",i);
-      if(strfind(strupper(creatureName),param2))
+	  local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned = C_MountJournal.GetMountInfoByID(mountID);
+      if((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName),passedName)))
       then
+		if(not summonable)
+		then
+			KU_ChatPrint("This mount is not summonable by this character");
+			return;
+		end
+		if(not owned)
+		then
+			KU_ChatPrint("You do not owned this mount");
+			return;
+		end
         local mounts = KU_GetToonConfig("INSTMounts");
         if(not mounts)
         then
@@ -2929,7 +3007,7 @@ local function KU_FlyableZone()
     return true; -- Flyable everywhere else in northrend
   elseif(continent == 8) -- Broken Isles
   then
-    return false;
+    return true;
   elseif(continent == -1) -- Instance
   then
     return false;
