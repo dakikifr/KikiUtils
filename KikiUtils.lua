@@ -327,7 +327,7 @@ function KU_QuestLogQuests_Update(poiTable)
     local numEntries, numQuests = GetNumQuestLogEntries();
 	local showPOIs = GetCVarBool("questPOI");
 
-	local mapID, isContinent = GetCurrentMapAreaID();
+	local mapID = WorldMapFrame:GetMapID();
 	
 	local button, prevButton;
 	
@@ -904,15 +904,15 @@ local function KU_SetNewGryphon(printmsg)
     then
       KU_ChatPrint(KU_GRYPHON_HIDDEN);
     end
-    MainMenuBarLeftEndCap:Hide();
-    MainMenuBarRightEndCap:Hide();
+    MainMenuBarArtFrame.LeftEndCap:Hide();
+    MainMenuBarArtFrame.RightEndCap:Hide();
   else
     if(printmsg)
     then
       KU_ChatPrint(KU_GRYPHON_SHOWN);
     end
-    MainMenuBarLeftEndCap:Show();
-    MainMenuBarRightEndCap:Show();
+	MainMenuBarArtFrame.LeftEndCap:Show();
+	MainMenuBarArtFrame.RightEndCap:Show();
   end
 end
 
@@ -2349,7 +2349,7 @@ function KikiUtils_OnEvent(self,event,...)
       KU_CurrentZone = GetRealZoneText();
     end
     KU_LastPosition = { };
-    KU_LastPosition.x, KU_LastPosition.y = GetPlayerMapPosition("player");
+    --KU_LastPosition.x, KU_LastPosition.y = GetPlayerMapPosition("player");
     -- Reset variables
     KU_IS_ATTACK = 0;
     KU_IS_COMBAT = 0;
@@ -2573,7 +2573,7 @@ function KikiUtils_OnLoad(self)
   self:RegisterEvent("CHAT_MSG_PARTY");
   self:RegisterEvent("CHAT_MSG_RAID");
   self:RegisterEvent("UNIT_COMBAT");
-  self:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF");
+  --self:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF");
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA");
   --self:RegisterEvent("UNIT_POWER_BAR_SHOW");
   --self:RegisterEvent("UNIT_POWER_BAR_HIDE");
@@ -2968,8 +2968,21 @@ local KU_FORM_BINDINGS = {
   [KU_FORMS_SWIFT_FLIGHT] = "KIKIUTILS_SKF",
 };
 
+function KU_GetCurrentMapContinent()
+	local currentMapId, TOP_MOST = C_Map.GetBestMapForUnit('player'), true
+	if (currentMapId)
+	then
+		local currentContinentInfo = MapUtil.GetMapParentInfo(currentMapId, Enum.UIMapType.Continent, TOP_MOST)
+		if (currentContinentInfo ~= nil)
+		then
+			return currentContinentInfo.mapID, currentContinentInfo.name
+		end
+	end
+	return 0, ""
+end
+
 local function KU_FlyableZone()
-  local continent = GetCurrentMapContinent();
+  local continent = KU_GetCurrentMapContinent();
   
   if(continent == 1 or continent == 2)
   then
@@ -3045,7 +3058,8 @@ local function _KU_CreateMountMacros(landmount,flymount)
 
   if(KU_IsDruid)
   then
-    travel_name = select(2,GetShapeshiftFormInfo(3));
+	local stanceSpellID = select(4,GetShapeshiftFormInfo(3));
+	travel_name = select(2, KU_HasSpell(stanceSpellID));
     mount_add = "stance:0,";
   end
   if(KU_IsShaman)
@@ -3133,9 +3147,15 @@ local function _KU_CreateMountMacros(landmount,flymount)
 end
 
 function KU_SetupMountMacros()
+  if (KU_GetCurrentMapContinent() == 0)
+  then
+	pendingSetupMacro = true
+	return
+  end
+
   local macrotext;
 
-  SetMapToCurrentZone(); -- Force a Map zone change, so that the GetCurrentMapContinent() won't return something incorrect
+  --SetMapToCurrentZone(); -- Force a Map zone change, so that the GetCurrentMapContinent() won't return something incorrect
 
   macrotext = _KU_CreateMountMacros(KU_GetMountToUse());
   KU_ETB:SetAttribute("macrotext",macrotext);
@@ -3154,7 +3174,8 @@ function KikiUtils_RefreshStance()
     local STANCE_LIST = {};
     for i = 1, GetNumShapeshiftForms()
     do
-      STANCE_LIST[i] = select(2,GetShapeshiftFormInfo(i));
+		local stanceSpellID = select(4,GetShapeshiftFormInfo(i));
+      STANCE_LIST[i] = select(2, KU_HasSpell(stanceSpellID));
     end
     
     for i = 0, #STANCE_LIST

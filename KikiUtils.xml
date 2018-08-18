@@ -11,7 +11,7 @@
         KikiUtils_OnEvent(self,event,...);
       </OnEvent>
       <OnUpdate>
-        KikiUtils_Moving_OnUpdate(self,elapsed);
+        --KikiUtils_Moving_OnUpdate(self,elapsed);
       </OnUpdate>
     </Scripts>
   </Frame>
