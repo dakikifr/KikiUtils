@@ -188,6 +188,7 @@ local KU_IsRogue = false;
 local KU_IsShaman = false;
 local KU_IsPaladin = false;
 local KU_IsDK = false;
+local KU_IsDH = false;
 local KU_IsGhostWolf = 0;
 local KU_MustSwapDefaultIdol = false;
 local KU_GainAttacks = "";
@@ -209,14 +210,12 @@ local KU_OldBindingAB1 = nil;
 local KU_OldBindingAB2 = nil;
 local KU_OldBindingSB1 = nil;
 local KU_OldBindingSB2 = nil;
-local KU_MustCheckMountingState = true;
 local KU_MustCheckGhostWolfState = true;
 local KU_MustCheckCheetahState = true;
 local KU_HasUseMount = false;
 local pendingSetupMacro = false;
 local pendingSetupForceAttackMacro = false;
 local pendingSetupBindings = false;
-local KU_ShowQuestLevels = false;
 local KU_SubZoneRegistered = false;
 local KU_ActiveTree = nil;
 local KU_MustRestoreMusic = false;
@@ -319,269 +318,6 @@ end
 
 
 --------------- Hooked functions ---------------
-
-function KU_QuestLogQuests_Update(poiTable)
-  if(KU_ShowQuestLevels)
-  then
-	local playerMoney = GetMoney();
-    local numEntries, numQuests = GetNumQuestLogEntries();
-	local showPOIs = GetCVarBool("questPOI");
-
-	local mapID = WorldMapFrame:GetMapID();
-	
-	local button, prevButton;
-	
-	QuestPOI_ResetUsage(QuestScrollFrame.Contents);
-
-	local poiFrameLevel = QuestLogQuests_GetHeaderButton(1):GetFrameLevel() + 2;
-
-	local storyID, storyMapID = GetZoneStoryID();
-	if ( storyID ) then
-		QuestScrollFrame.Contents.StoryHeader:Show();
-		QuestScrollFrame.Contents.StoryHeader.Text:SetText(GetMapNameByID(storyMapID));
-		local numCriteria = GetAchievementNumCriteria(storyID);
-		local completedCriteria = 0;
-		for i = 1, numCriteria do
-			local _, _, completed = GetAchievementCriteriaInfo(storyID, i);
-			if ( completed ) then
-				completedCriteria = completedCriteria + 1;
-			end
-		end
-		local numPoints = select(3, GetAchievementInfo(storyID));
-		QuestScrollFrame.Contents.StoryHeader.Points:SetText(numPoints);
-		QuestScrollFrame.Contents.StoryHeader.Progress:SetFormattedText(QUEST_STORY_STATUS, completedCriteria, numCriteria);
-		prevButton = QuestScrollFrame.Contents.StoryHeader;
-	else
-		QuestScrollFrame.Contents.StoryHeader:Hide();
-	end
-
-	local headerIndex = 0;
-	local titleIndex = 0;
-	local objectiveIndex = 0;
-	local headerCollapsed = false;
-	local headerTitle, headerOnMap, headerShown, headerLogIndex, mapHeaderButtonIndex;
-	local noHeaders = true;
-	for questLogIndex = 1, numEntries do
-		local title, level, suggestedGroup, isHeader, isCollapsed, isComplete, frequency, questID, startEvent, displayQuestID, isOnMap, hasLocalPOI, isTask, isBounty, isStory = GetQuestLogTitle(questLogIndex);
-		local difficultyColor = GetQuestDifficultyColor(level);
-		if ( isHeader ) then
-			headerTitle = title;
-			headerOnMap = isOnMap;
-			headerShown = false;
-			headerLogIndex = questLogIndex;
-			headerCollapsed = isCollapsed;
-			difficultyColor = QuestDifficultyColors["header"];
-		elseif ( not isTask and (not isBounty or IsQuestComplete(questID))) then
-			-- we have at least one valid entry, show the header for it
-			if ( not headerShown ) then
-				headerShown = true;
-				noHeaders = false;
-				headerIndex = headerIndex + 1;
-				button = QuestLogQuests_GetHeaderButton(headerIndex);
-				if (headerCollapsed) then
-					button:SetNormalTexture("Interface\\Buttons\\UI-PlusButton-Up");
-				else
-					button:SetNormalTexture("Interface\\Buttons\\UI-MinusButton-Up");
-				end
-				button:SetHighlightTexture("Interface\\Buttons\\UI-PlusButton-Hilight");
-				if ( headerTitle ) then
-					button:SetText(headerTitle);
-					button:SetHitRectInsets(0, -button.ButtonText:GetWidth(), 0, 0);
-				else
-					button:SetText("");
-					button:SetHitRectInsets(0, 0, 0, 0);
-				end
-				--button:ClearAllPoints();
-				--if ( prevButton ) then
-					--button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
-				--else
-					--button:SetPoint("TOPLEFT", 1, -6);
-				--end
-				--button:Show();				
-				--button.questLogIndex = headerLogIndex;
-				prevButton = button;
-			end
-
-			if (not headerCollapsed) then
-				local totalHeight = 8;
-				titleIndex = titleIndex + 1;
-				button = QuestLogQuests_GetTitleButton(titleIndex);
-				--button.questID = questID;
-
-				if ( displayQuestID ) then
-					title = questID.." - "..title;
-				end
-				title = "["..level.."] " .. title;
-			
-				-- If not a header see if any nearby group mates are on this quest
-				local partyMembersOnQuest = 0;
-				for j=1, GetNumSubgroupMembers() do
-					if ( IsUnitOnQuestByQuestID(questID, "party"..j) ) then
-						partyMembersOnQuest = partyMembersOnQuest + 1;
-					end
-				end
-			
-				if ( partyMembersOnQuest > 0 ) then
-					title = "["..partyMembersOnQuest.."] "..title;
-				end
-
-				button.Text:SetText(title);
-				--button.Text:SetTextColor( difficultyColor.r, difficultyColor.g, difficultyColor.b );
-			
-				totalHeight = totalHeight + button.Text:GetHeight();
-				if ( IsQuestHardWatched(questLogIndex) ) then
-					button.Check:Show();
-					button.Check:SetPoint("LEFT", button.Text, button.Text:GetWrappedWidth() + 2, 0);
-				else
-					button.Check:Hide();
-				end
-			
-				-- tag. daily icon can be alone or before other icons except for COMPLETED or FAILED
-				--[[local tagID;
-				local questTagID, tagName = GetQuestTagInfo(questID);
-				if ( isComplete and isComplete < 0 ) then
-					tagID = "FAILED";
-				elseif ( isComplete and isComplete > 0 ) then
-					tagID = "COMPLETED";
-				elseif( questTagID and questTagID == QUEST_TAG_ACCOUNT ) then
-					local factionGroup = GetQuestFactionGroup(questID);
-					if( factionGroup ) then
-						tagID = "ALLIANCE";
-						if ( factionGroup == LE_QUEST_FACTION_HORDE ) then
-							tagID = "HORDE";
-						end
-					else
-						tagID = QUEST_TAG_ACCOUNT;
-					end
-				elseif( frequency == LE_QUEST_FREQUENCY_DAILY and (not isComplete or isComplete == 0) ) then
-					tagID = "DAILY";
-				elseif( frequency == LE_QUEST_FREQUENCY_WEEKLY and (not isComplete or isComplete == 0) )then
-					tagID = "WEEKLY";
-				elseif( questTagID ) then
-					tagID = questTagID;
-				end
-
-				if ( tagID ) then
-					local tagCoords = QUEST_TAG_TCOORDS[tagID];
-					if( tagCoords ) then
-						button.TagTexture:SetTexCoord( unpack(tagCoords) );
-						button.TagTexture:Show();
-					end
-				else
-					button.TagTexture:Hide();
-				end]]
-			
-				-- POI/objectives
-				local requiredMoney = GetQuestLogRequiredMoney(questLogIndex);
-				local numObjectives = GetNumQuestLeaderBoards(questLogIndex);
-				-- complete?
-				if ( isComplete and isComplete < 0 ) then
-					isComplete = false;
-				elseif ( numObjectives == 0 and playerMoney >= requiredMoney and not startEvent) then
-					isComplete = true;
-				end
-				-- objectives
-				if ( isComplete ) then
-					objectiveIndex = objectiveIndex + 1;
-					local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
-					--objectiveFrame.questID = questID;
-					--objectiveFrame:Show();
-					local completionText = GetQuestLogCompletionText(questLogIndex) or QUEST_WATCH_QUEST_READY;
-					--objectiveFrame.Text:SetText(completionText);
-					local height = objectiveFrame.Text:GetStringHeight();
-					--objectiveFrame:SetHeight(height);
-					--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
-					totalHeight = totalHeight + height + 3;						
-				else	
-					local prevObjective;
-					for i = 1, numObjectives do
-						local text, objectiveType, finished = GetQuestLogLeaderBoard(i, questLogIndex);
-						if ( text and not finished ) then
-							objectiveIndex = objectiveIndex + 1;
-							local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
-							--objectiveFrame.questID = questID;
-							--objectiveFrame:Show();
-							--objectiveFrame.Text:SetText(text);
-							local height = objectiveFrame.Text:GetStringHeight();
-							--objectiveFrame:SetHeight(height);
-							if ( prevObjective ) then
-								--objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
-								height = height + 2;
-							else
-								--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
-								height = height + 3;
-							end
-							totalHeight = totalHeight + height;								
-							prevObjective = objectiveFrame;
-						end
-					end
-					if ( requiredMoney > playerMoney ) then
-						objectiveIndex = objectiveIndex + 1;
-						local objectiveFrame = QuestLog_GetObjectiveFrame(objectiveIndex);
-						--objectiveFrame.questID = questID;
-						--objectiveFrame:Show();
-						--objectiveFrame.Text:SetText(GetMoneyString(playerMoney).." / "..GetMoneyString(requiredMoney));
-						local height = objectiveFrame.Text:GetStringHeight();
-						--objectiveFrame:SetHeight(height);
-						if ( prevObjective ) then
-							--objectiveFrame:SetPoint("TOPLEFT", prevObjective, "BOTTOMLEFT", 0, -2);
-							height = height + 2;
-						else
-							--objectiveFrame:SetPoint("TOPLEFT", button.Text, "BOTTOMLEFT", 0, -3);
-							height = height + 3;
-						end
-						totalHeight = totalHeight + height;
-					end
-				end
-				-- POI
-				if ( hasLocalPOI and showPOIs ) then			
-					local poiButton;
-					if ( isComplete ) then
-						poiButton = QuestPOI_GetButton(QuestScrollFrame.Contents, questID, "normal", nil, isStory);
-					else
-						for i = 1, #poiTable do
-							if ( poiTable[i] == questID ) then
-								poiButton = QuestPOI_GetButton(QuestScrollFrame.Contents, questID, "numeric", i, isStory);
-								break;
-							end
-						end
-					end
-					if ( poiButton ) then
-						--poiButton:SetPoint("TOPLEFT", button, 6, -4);
-						--poiButton:SetFrameLevel(poiFrameLevel);
-						--poiButton.parent = button;
-					end
-					-- extra room because of POI icon
-					totalHeight = totalHeight + 6;
-					--button.Text:SetPoint("TOPLEFT", 31, -8);
-				--[[else
-					button.Text:SetPoint("TOPLEFT", 31, -4);]]
-				end
-				button:SetHeight(totalHeight);
-				--button.questLogIndex = questLogIndex;
-				--[[button:ClearAllPoints();
-				if ( prevButton ) then
-					button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0);
-				else
-					button:SetPoint("TOPLEFT", 1, -6);
-				end
-				button:Show();]]
-				prevButton = button;
-			end
-		end
-	end
-
-	-- background
-	if ( titleIndex == 0 and noHeaders ) then
-		QuestScrollFrame.Background:SetAtlas("NoQuestsBackground", true);
-	else
-		QuestScrollFrame.Background:SetAtlas("QuestLogBackground", true);
-	end
-	
-	QuestPOI_SelectButtonByQuestID(QuestScrollFrame.Contents, GetSuperTrackedQuestID());
-
-  end
-end
 
 local function KU_GetScreenHeight(col)
   if(col == 0)
@@ -754,30 +490,6 @@ local function KU_MustBip(str)
   else
     return false;
   end
-end
-
-local function KU_CheckMount()
-  KU_Tooltip:SetOwner(UIParent, "ANCHOR_NONE");
-  KU_Tooltip:ClearLines();
-
-  for i = 0,16
-  do
-    _G["KU_TooltipTextLeft2"]:SetText("");
-    KU_Tooltip:SetUnitBuff("player",i);
-    local ttext = _G["KU_TooltipTextLeft2"];
-    if(ttext and ttext:GetText() ~= nil)
-    then
-      local str = ttext:GetText();
-      if(strfind(str,KU_BUFF_MOUNT_TT) or strfind(str,KU_BUFF_MOUNT_TT2))
-      then
-        KU_IS_MOUNTING = 1;
-        KU_Tooltip:Hide();
-        return;
-      end
-    end
-  end
-  KU_Tooltip:Hide();
-  KU_IS_MOUNTING = 0;
 end
 
 function KU_GetInventoryName(bag,slot)
@@ -1024,25 +736,6 @@ local function KU_SetNewBags(printmsg)
     end
   end
 end
-
-local function KU_SetNewLevel(printmsg)
-  if(KU_GetToonConfig("QuestLevel"))
-  then
-    if(printmsg)
-    then
-      KU_ChatPrint(KU_CHAT_LEVEL_ON);
-    end
-    KU_ShowQuestLevels = true;
-  else
-    if(printmsg)
-    then
-      KU_ChatPrint(KU_CHAT_LEVEL_OFF);
-    end
-    KU_ShowQuestLevels = false;
-  end
-end
-
-hooksecurefunc("QuestLogQuests_Update",KU_QuestLogQuests_Update)
 
 local function KU_SetNewSwapIdol(printmsg)
   if(KU_GetToonConfig("SwapIdol"))
@@ -1312,9 +1005,6 @@ local function KU_Commands(command)
   --[[elseif(cmd == "track")
   then
     KU_Commands_ParamParse(param,"track","TrackWarning",KU_SetNewTrack);]]
-  elseif(cmd == "level")
-  then
-    KU_Commands_ParamParse(param,"level","QuestLevel",KU_SetNewLevel);
   elseif(cmd == "bags")
   then
     if(param == "off")
@@ -1905,8 +1595,9 @@ function KU_GetMountToUse(dontgetflying)
   local landmount = nil;
   local flymount = nil;
 
+   local inInstance,instanceType = IsInInstance();
+
   -- First check for BG mounts
-  local inInstance,instanceType = IsInInstance();
   if(inInstance and instanceType == "pvp")
   then
     local mounts = KU_GetToonConfig("BGMounts");
@@ -1921,8 +1612,7 @@ function KU_GetMountToUse(dontgetflying)
   end
   
   -- Then check for INST mounts
-  local inInstance,instanceType = IsInInstance();
-  if(inInstance and instanceType == "raid" or instanceType == "party")
+  if(inInstance and (instanceType == "raid" or instanceType == "party"))
   then
     local mounts = KU_GetToonConfig("INSTMounts");
     if(mounts)
@@ -2082,13 +1772,15 @@ local function KikiUtils_StartInitVars()
     elseif(clas == "DEATHKNIGHT")
     then
       KU_IsDK = true;
+    elseif(clas == "DEMONHUNTER")
+    then
+      KU_IsDH = true;
     end
     KU_ImportGlobalConfig(); -- Check for Global->Local settings convertion
     KU_CheckConvertBindings();
     KU_SetNewGryphon(false);
     KU_SetNewClassBar(false);
     KU_SetNewTrack(false);
-    KU_SetNewLevel(false);
     KU_SetNewBags(false);
     --KU_SetClock(false);
     KU_SetClockLock(false);
@@ -2284,13 +1976,12 @@ function KikiUtils_OnEvent(self,event,...)
   then
     if(event == "UNIT_AURA" and select(1,...) ~= "player") then return; end
     local old = KU_IS_MOUNTING;
-    KU_MustCheckMountingState = true;
     KU_MustCheckGhostWolfState = true;
     KU_MustCheckCheetahState = true;
-    local new = KU_IsMounting();
+    local new = IsMounted();
     if(new ~= old) -- Mounting state changed
     then
-      if(new == 1) -- Mounting
+      if(new) -- Mounting
       then
         KU_HasUseMount = true;
       elseif(InCombatLockdown())
@@ -2300,6 +1991,7 @@ function KikiUtils_OnEvent(self,event,...)
         KU_SetupMountMacros();
       end
     end
+	KU_IS_MOUNTING = new;
   elseif(event == "AUTOFOLLOW_BEGIN")
   then
     if(KU_IS_AUTORUN == 1)
@@ -2602,15 +2294,6 @@ end
 
 function KU_GetShapeId()
   return KU_LAST_SHAPE;
-end
-
-function KU_IsMounting()
-  if(KU_MustCheckMountingState)
-  then
-    KU_CheckMount();
-    KU_MustCheckMountingState = false;
-  end
-  return KU_IS_MOUNTING;
 end
 
 function KU_IsMoving()
@@ -2976,81 +2659,38 @@ function KU_GetCurrentMapContinent()
 		if (currentContinentInfo ~= nil)
 		then
 			return currentContinentInfo.mapID, currentContinentInfo.name
+		else
+			return KU_GetCurrentMap() -- Special case for Nazjatar that is already a top level map
 		end
 	end
 	return 0, ""
 end
 
-local function KU_FlyableZone()
-  local continent = KU_GetCurrentMapContinent();
-  
-  if(continent == 1 or continent == 2)
-  then
-    if(KU_HasFML() == false) -- No Flight Master License yet
-    then
-      return false;
-    end
-    return true;
-  elseif(continent == 5)
-  then
-    if(KU_HasFML() == false) -- No Flight Master License yet
-    then
-      return false;
-    end
-    -- Now, must check zone
-    if(KU_CurrentZone == KU_ZONE_DEEPHOLM) -- We can only fly in Deepholm
-    then
-      return true;
-    end
-    return false;
-  elseif(continent == 3)
-  then
-    return true;
-  elseif(continent == 4) -- Northrend
-  then
-    if(KU_HasCWF() == false) -- No Cold Weather Flying yet
-    then
-      return false;
-    end
-    -- Now, must check zone
-    if(KU_CurrentZone == KU_ZONE_WINTERGRASP)
-    then
-      return GetOutdoorPVPWaitTime() ~= nil;
-    end
-    return true; -- Flyable everywhere else in northrend
-  elseif(continent == 8) -- Broken Isles
-  then
-    return true;
-  elseif(continent == -1) -- Instance
-  then
-    return false;
-  else  -- Error or unknown
-    return true;
-  end
+function KU_GetCurrentMap()
+	local currentMapId = C_Map.GetBestMapForUnit('player')
+	if (currentMapId)
+	then
+		local currentContinentInfo = C_Map.GetMapInfo(currentMapId)
+		if (currentContinentInfo ~= nil)
+		then
+			return currentContinentInfo.mapID, currentContinentInfo.name
+		end
+	end
+	return 0, ""
 end
 
-local function _KU_CreateMountMacros(landmount,flymount)
+function _KU_CreateMountMacros(landmount,flymount)
   local macrotext;
   local travel_name = nil;
   local ghost = nil;
   local mount_add = "";
   local flyable = false;
-  local noflyable_add = "";
-  local flyable_add = "";
+  local flyable_add = ",flyable";
   local swim_add = "";
   local roll_name = nil;
   local tiger_lust = nil;
+  local rush_name=  nil;
   
-  if(KU_FlyableZone()) -- Must detect flyable myself, since [flyable] macro conditionnal returns "true" in northrend if lvl < 77
-  then
-    flyable = true;
-    if(flymount and KU_IsDruid) -- Must have a flight mount!  -- Edit 3.0.2: Force noflyable on ground mount to auto cast Flight form
-    then
-      --noflyable_add = ",noflyable";
-      --flyable_add = ",flyable";
-    end
-  end
-
   if(landmount == GetSpellInfo(75207)) -- Abyssal Searhorse
   then
     swim_add = ",swimming";
@@ -3062,6 +2702,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
 	travel_name = select(2, KU_HasSpell(stanceSpellID));
     mount_add = "stance:0,";
   end
+
   if(KU_IsShaman)
   then
     ghost = KU_GHOST_WOLF;
@@ -3077,21 +2718,26 @@ local function _KU_CreateMountMacros(landmount,flymount)
 	end
   end
   
+  if(KU_IsDH)
+  then
+    rush_name = GetSpellInfo(195072); -- Fel Rush
+  end
+  
   -- OOC Macro
   macrotext = "";
   if(landmount)
   then
-    if(flymount and flyable)
+    if(flymount)
     then
       macrotext = "/use ["..mount_add.."nomounted,noswimming,nocombat"..flyable_add.."]"..flymount..";["..mount_add.."nomounted,nocombat"..swim_add.."]"..landmount.."\n";
     else
-      macrotext = "/use ["..mount_add.."nomounted,noswimming,nocombat"..noflyable_add..swim_add.."]"..landmount.."\n";
+      macrotext = "/use ["..mount_add.."nomounted,noswimming,nocombat"..swim_add.."]"..landmount.."\n";
     end
   end
   if(travel_name)
   then
     macrotext = macrotext .. "/cast ";
-    if(travel_name and flyable) -- Have Flight form
+    if(travel_name) -- Have Flight form
     then
       macrotext = macrotext .. "[nomounted,stance:0,nocombat"..flyable_add.."]"..travel_name..";";
     end
@@ -3106,6 +2752,10 @@ local function _KU_CreateMountMacros(landmount,flymount)
 	else
       macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
 	end
+  end
+  if(rush_name)
+  then
+    macrotext = macrotext .. "/cast [nomounted]"..rush_name.."\n";
   end
   if(ghost)
   then
@@ -3147,7 +2797,7 @@ local function _KU_CreateMountMacros(landmount,flymount)
 end
 
 function KU_SetupMountMacros()
-  if (KU_GetCurrentMapContinent() == 0)
+  if (KU_GetCurrentMap() == 0)
   then
 	pendingSetupMacro = true
 	return
@@ -3355,7 +3005,11 @@ local function KikiUtils_SetupCure()
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",51886); -- Cleanse Spirit (Curse/Magic)
   elseif(cls == "DRUID")
   then
-    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",2782); -- Remove Corruption (Curse/Poison/Magic)
+    local healSpell = GetSpellInfo(88423) -- Nature's Cure
+    local otherSpell = GetSpellInfo(2782) -- Remove Corruption
+    local sootheSpell = GetSpellInfo(2908) -- Soothe
+    local macroText = "/cast [harm] "..sootheSpell.." ; [spec:4] "..healSpell.." ; "..otherSpell;
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "MAGE")
   then
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",475); -- Remove Curse (Curse)
@@ -3368,10 +3022,16 @@ local function KikiUtils_SetupCure()
   elseif(cls == "MONK")
   then
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",115450); -- Detox (Poison/Disease)
+  elseif(cls == "DEMONHUNTER")
+  then
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",278326); -- Consume Magic
   elseif(cls == "PRIEST")
   then
-    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",528); -- Cure Disease (Disease/Poison)
-    -- Defensive Dispel Magic
+    local healSpell = GetSpellInfo(527) -- Purify
+    local otherSpell = GetSpellInfo(213634) -- Purify Disease
+    local offSpell = GetSpellInfo(528) -- Dispel Magic
+    local macroText = "/cast [harm] "..offSpell.." ; [spec:3] "..otherSpell.." ; "..healSpell;
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   end
 end
 
@@ -3529,8 +3189,17 @@ end
 function KU_HasFML()
   return KU_HasSpell(90267);
 end
+
 function KU_HasCWF()
   return KU_HasSpell(54197);
+end
+
+function KU_HasDPF() -- Draenor Pathfinder
+  return KU_HasSpell(191645);
+end
+
+function KU_HasBIPF() -- Broken Isles Pathfinder
+  return KU_HasSpell(233368);
 end
 
 function KU_BuyItem(itemID,quantity)
