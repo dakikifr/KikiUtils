@@ -51,28 +51,4 @@
   <Binding name="KIKIUTILS_SET_RAID_TARGET" description="Set Raid Target" hidden="false">
     -- Dummy to prevent binding being removed by the game because it's empty
   </Binding>
-
-  <Binding name="KIKIUTILS_MLFIXLEFT" description="Fix LEFT" runOnUp="true">
-    if ( keystate == "down" ) then
-      KU_FixML_Left = true;
-    else
-      KU_FixML_Left = false;
-      if(KU_MustToggleMouseLook and GEMSystem_Schedule and not KU_FixML_Right)
-      then
-        GEMSystem_Schedule(0.1,KU_ToggleMouseLook);
-      end
-    end
-  </Binding>
-  <Binding name="KIKIUTILS_MLFIXRIGHT" description="Fix RIGHT" runOnUp="true">
-    if ( keystate == "down" ) then
-      KU_FixML_Right = true;
-    else
-      KU_FixML_Right = false;
-      if(KU_MustToggleMouseLook and GEMSystem_Schedule and not KU_FixML_Left)
-      then
-        GEMSystem_Schedule(0.1,KU_ToggleMouseLook);
-      end
-    end
-  </Binding>
-
 </Bindings>

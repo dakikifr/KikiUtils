@@ -168,8 +168,6 @@ KU_CharConfig = {};
 KU_FollowModeOn = 0;
 KU_MouseLookOn = 0;
 KU_MouseCamera = 0;
-KU_FixML_Left = false;
-KU_FixML_Right = false;
 KU_MustToggleMouseLook = false;
 
 --------------- Local variables ---------------
@@ -1533,8 +1531,38 @@ end
 ---------------------------------------------------
 -- MouseLook
 ---------------------------------------------------
+local function KU_CheckDeferredMouseLookStart()
+  if KU_MustToggleMouseLook
+  then
+    KU_ToggleMouseLook()
+  end
+end
+
+local function KU_CheckDeferredMouseLookStop()
+  if KU_MustToggleMouseLook
+  then
+    KU_ToggleMouseLook()
+  end
+end
+
+_G.hooksecurefunc("TurnOrActionStop", function()
+  KU_CheckDeferredMouseLookStart()
+end)
+
+_G.hooksecurefunc("CameraOrSelectOrMoveStop", function()
+  KU_CheckDeferredMouseLookStart()
+end)
+
+_G.hooksecurefunc("MoveForwardStop", function()
+  KU_CheckDeferredMouseLookStop()
+end)
+
+_G.hooksecurefunc("MoveBackwardStop", function()
+  KU_CheckDeferredMouseLookStop()
+end)
+
 function KU_ToggleMouseLook()
-  if(KU_FixML_Left or KU_FixML_Right)
+  if(IsMouseButtonDown(1) or IsMouseButtonDown(2))
   then
     KU_MustToggleMouseLook = true;
     return;
@@ -2689,7 +2717,8 @@ function _KU_CreateMountMacros(landmount,flymount)
   local swim_add = "";
   local roll_name = nil;
   local tiger_lust = nil;
-  local rush_name=  nil;
+  local death_advance = nil;
+  local rush_name = nil;
   
   if(landmount == GetSpellInfo(75207)) -- Abyssal Searhorse
   then
@@ -2718,6 +2747,11 @@ function _KU_CreateMountMacros(landmount,flymount)
 	end
   end
   
+  if(KU_IsDK)
+  then
+    death_advance = GetSpellInfo(48265) -- Death's Advance
+  end
+
   if(KU_IsDH)
   then
     rush_name = GetSpellInfo(195072); -- Fel Rush
@@ -2752,6 +2786,10 @@ function _KU_CreateMountMacros(landmount,flymount)
 	else
       macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
 	end
+  end
+  if(death_advance)
+  then
+    macrotext = macrotext .. "/cast [nomounted]"..death_advance.."\n";
   end
   if(rush_name)
   then
