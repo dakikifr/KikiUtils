@@ -179,7 +179,9 @@ local KU_LAST_SHAPE = -1;
 local KU_IS_AUTORUN = 0;
 local KU_IS_COMBAT = 0;
 local KU_CHECK_PALADIN_SEAL = 0;
+local KU_IsWarlock = false;
 local KU_IsDruid = false;
+local KU_IsMage = false;
 local KU_IsMonk = false;
 local KU_IsHunter = false;
 local KU_IsRogue = false;
@@ -327,10 +329,10 @@ local function KU_GetScreenHeight(col)
 end
 
 function KU_updateContainerFrameAnchors()
-local CONTAINER_OFFSET_Y = KU_GetToonConfigInt("AdjustBags",70);
+  local CONTAINER_OFFSET_Y = KU_GetToonConfigInt("AdjustBags",70);
+	local containerScale = KU_GetToonConfigInt("ScaleBags",1.0);
 	local frame, xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
 	local screenWidth = GetScreenWidth();
-	local containerScale = 1;
 	local leftLimit = 0;
 	if ( BankFrame:IsShown() ) then
 		leftLimit = BankFrame:GetRight() - 25;
@@ -714,13 +716,18 @@ local function KU_SetShowPercent(printmsg)
 end
 
 local function KU_SetNewBags(printmsg)
-  local value = KU_GetToonConfigInt("AdjustBags",nil);
-  if(value ~= nil)
+  local v1 = KU_GetToonConfigInt("AdjustBags",nil);
+  local v2 = KU_GetToonConfigInt("ScaleBags",nil);
+  if(v1 ~= nil or v2 ~= nil)
   then
     -- Check for conversion
-    if(tonumber(value) == nil)
+    if(tonumber(v1) == nil)
     then
       KU_SetToonConfig("AdjustBags",70); -- Set to default value: 70
+    end
+    if(tonumber(v2) == nil)
+    then
+      KU_SetToonConfig("ScaleBags",1.0); -- Set to default value: 1.0
     end
     if(printmsg)
     then
@@ -1009,13 +1016,23 @@ local function KU_Commands(command)
     then
       KU_SetToonConfig("AdjustBags",nil);
     else
-      local num = tonumber(param);
-      if(num == nil)
+      if (param == "")
+      then
+        KU_ChatPrint("Current bags parameters: Offset="..KU_GetToonConfigInt("AdjustBags",70).." Scale="..KU_GetToonConfigInt("ScaleBags",1.0));
+        return;
+      end
+      local _,_,offsetStr,scaleStr = strfind(param,"([^ ]+) *([^ ]*)")
+      local offset = tonumber(offsetStr);
+      local scale = tonumber(scaleStr);
+      if(offset == nil)
       then
         KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."bags");
         return;
-      else
-        KU_SetToonConfig("AdjustBags",num);
+      end
+      KU_SetToonConfig("AdjustBags",offset);
+      if(scale ~= nil)
+      then
+        KU_SetToonConfig("ScaleBags",scale);
       end
     end
     KU_SetNewBags(true);
@@ -1779,10 +1796,16 @@ local function KikiUtils_StartInitVars()
     -- Initialize Toon specific stuff
     KU_PlayerOfRealm = playerName.." of "..GetRealmName();
     local _,clas = UnitClass("player");
-    if(clas == "DRUID")
-    then
+  if(clas == "DRUID")
+  then
       KU_IsDruid = true;
-	elseif(clas == "MONK")
+  elseif(clas == "WARLOCK")
+  then
+    KU_IsWarlock = true;
+  elseif(clas == "MAGE")
+  then
+      KU_IsMage = true;
+  elseif(clas == "MONK")
 	then
 	  KU_IsMonk = true;
     elseif(clas == "HUNTER")
@@ -2714,11 +2737,13 @@ function _KU_CreateMountMacros(landmount,flymount)
   local mount_add = "";
   local flyable = false;
   local flyable_add = ",flyable";
+  local nocombat_add = ",nocombat";
   local swim_add = "";
   local roll_name = nil;
   local tiger_lust = nil;
   local death_advance = nil;
   local rush_name = nil;
+  local blink_name = nil;
   
   if(landmount == GetSpellInfo(75207)) -- Abyssal Searhorse
   then
@@ -2732,6 +2757,11 @@ function _KU_CreateMountMacros(landmount,flymount)
     mount_add = "stance:0,";
   end
 
+  if(KU_IsMage)
+  then
+    blink_name = GetSpellInfo(1953) -- Blink
+  end
+
   if(KU_IsShaman)
   then
     ghost = KU_GHOST_WOLF;
@@ -2740,11 +2770,11 @@ function _KU_CreateMountMacros(landmount,flymount)
   if(KU_IsMonk)
   then
     roll_name = GetSpellInfo(109132); -- Roll
-	local has_tl,tl_name = KU_HasSpell(116841); -- Tiger's Lust
-	if(has_tl)
-	then
-	  tiger_lust = tl_name;
-	end
+    local has_tl,tl_name = KU_HasSpell(116841); -- Tiger's Lust
+    if(has_tl)
+    then
+      tiger_lust = tl_name;
+    end
   end
   
   if(KU_IsDK)
@@ -2756,6 +2786,12 @@ function _KU_CreateMountMacros(landmount,flymount)
   then
     rush_name = GetSpellInfo(195072); -- Fel Rush
   end
+
+  -- Fix for the macro combat bug (/use [nocombat] not always trigger when out of combat when having a pet)
+  if KU_IsWarlock
+  then  
+    nocombat_add = "";
+  end
   
   -- OOC Macro
   macrotext = "";
@@ -2763,9 +2799,9 @@ function _KU_CreateMountMacros(landmount,flymount)
   then
     if(flymount)
     then
-      macrotext = "/use ["..mount_add.."nomounted,noswimming,nocombat"..flyable_add.."]"..flymount..";["..mount_add.."nomounted,nocombat"..swim_add.."]"..landmount.."\n";
+      macrotext = "/use ["..mount_add.."nomounted,noswimming"..nocombat_add..flyable_add.."]"..flymount..";["..mount_add.."nomounted"..nocombat_add..swim_add.."]"..landmount.."\n";
     else
-      macrotext = "/use ["..mount_add.."nomounted,noswimming,nocombat"..swim_add.."]"..landmount.."\n";
+      macrotext = "/use ["..mount_add.."nomounted,noswimming"..nocombat_add.."]"..landmount.."\n";
     end
   end
   if(travel_name)
@@ -2781,11 +2817,15 @@ function _KU_CreateMountMacros(landmount,flymount)
   if(roll_name)
   then
     if(tiger_lust)
-	then
+    then
       macrotext = macrotext .. "/castsequence [nomounted] reset=10 "..tiger_lust..","..roll_name..","..roll_name..","..roll_name.."\n";
-	else
+    else
       macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
-	end
+    end
+  end
+  if(blink_name)
+  then
+    macrotext = macrotext .. "/cast [nomounted]"..blink_name.."\n";
   end
   if(death_advance)
   then
@@ -2827,10 +2867,6 @@ function _KU_CreateMountMacros(landmount,flymount)
 	end
   end
   macrotext = macrotext .. "/dismount [mounted]\n/leavevehicle [canexitvehicle]";
-  if(string.len(macrotext) > 255)
-  then
-    kud("KikiUtils Mount Macro too long!! ("..string.len(macrotext)..")");
-  end
   return macrotext;
 end
 
@@ -3050,7 +3086,10 @@ local function KikiUtils_SetupCure()
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "MAGE")
   then
-    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",475); -- Remove Curse (Curse)
+    local dispelSpell = GetSpellInfo(475) -- Remove Curse
+    local stealSpell = GetSpellInfo(30449) -- Spellsteal
+    local macroText = "/cast [harm] "..stealSpell.." ; "..dispelSpell;
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "PALADIN")
   then
     local holySpell = GetSpellInfo(4987) -- Cleanse

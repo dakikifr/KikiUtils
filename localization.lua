@@ -6,7 +6,7 @@
 
 if ( GetLocale() == "frFR" ) then
   -- French localized variables
-  -- à(Ã ) á(Ã¡) â(Ã¢) ã(Ã£) ä(Ã¤) æ(Ã¦) ç(Ã§) è(Ã¨) é(Ã©) ê(Ãª) ë(Ã«) î(Ã®) ï(Ã¯) ò(Ã²) ó(Ã³) ô(Ã´) õ(Ãµ) ö(Ã¶) ù(Ã¹) ú(Ãº) û(Ã») ü(Ã¼) '(â€™)
+  -- ï¿½(Ã ) ï¿½(Ã¡) ï¿½(Ã¢) ï¿½(Ã£) ï¿½(Ã¤) ï¿½(Ã¦) ï¿½(Ã§) ï¿½(Ã¨) ï¿½(Ã©) ï¿½(Ãª) ï¿½(Ã«) ï¿½(Ã®) ï¿½(Ã¯) ï¿½(Ã²) ï¿½(Ã³) ï¿½(Ã´) ï¿½(Ãµ) ï¿½(Ã¶) ï¿½(Ã¹) ï¿½(Ãº) ï¿½(Ã») ï¿½(Ã¼) '(â€™)
   -- => Bindings Names
   BINDING_HEADER_KIKIUTILSHEADER = "Kiki Utils";
   BINDING_NAME_KIKIUTILS_STEALTH = "Forcer le camouflage";
@@ -107,7 +107,7 @@ if ( GetLocale() == "frFR" ) then
   KU_CHAT_SB_SPELL_ASSIGNED = "Assignation \195\160 la touche '%s' effectu\195\169e pour : Type='%s' Nom='%s' Cible='%s'"; -- $1=key $2=type $3=name $4=unit
   KU_CHAT_SB_SPELL_REMOVED = "Assignation '%s' retir\195\169 (la touche \195\169tait '%s')."; -- $1=name $2=key
   KU_CHAT_SB_MULTIPLE_SPELLS_FOUND = "Plusieurs sorts trouv\195\169s avec le nom partiel '%s'. Pr\195\169cisez le nom du sort."; -- $1=partial_spell_name
-  KU_CHAT_SB_SPELL_NOT_FOUND = "Assignation n°%d non trouv\195\169e. Faites '/ku binds' pour la liste des assignation effectives."; -- $1=index
+  KU_CHAT_SB_SPELL_NOT_FOUND = "Assignation nï¿½%d non trouv\195\169e. Faites '/ku binds' pour la liste des assignation effectives."; -- $1=index
   KU_CHAT_SB_SPELLS_LISTING_START = "Liste des sorts assignÃ©s :";
   KU_CHAT_SB_SPELLS_LISTING_END = "Fin de la liste";
   KU_CHAT_SB_SPELLS_LISTING_ITEM = " %d- '%s' assign\195\169 \195\160 la touche '%s'"; -- $1=spell $2=key
@@ -117,16 +117,16 @@ if ( GetLocale() == "frFR" ) then
   -- => Other strings
   KU_BUFF_MOUNT_TT = "Vitesse augmentÃ©e de ";
   KU_BUFF_MOUNT_TT2 = "Augmente la vitesse de ";
-  KU_FORMS_BEAR = "Bear Form";
-  KU_FORMS_DIRE_BEAR = "Dire Bear Form";
-  KU_FORMS_CAT = "Cat Form";
-  KU_FORMS_AQUA = "Aquatic Form";
-  KU_FORMS_TRAVEL = "Travel Form";
+  KU_FORMS_BEAR = "Forme d'ours";
+  KU_FORMS_DIRE_BEAR = "Forme d'ours fÃ©roce";
+  KU_FORMS_CAT = "Forme de fÃ©lin";
+  KU_FORMS_AQUA = "Forme aquatique";
+  KU_FORMS_TRAVEL = "Forme de voyage";
   KU_FORMS_MOONKIN = "Moonkin Form";
   KU_FORMS_TREE = "Tree of Life Form";
   KU_FORMS_FLIGHT = "Flight Form";
   KU_FORMS_SWIFT_FLIGHT = "Swift Flight Form";
-  KU_PROWL = "Prowl";
+  KU_PROWL = "RÃ´der";
   KU_TRAVEL_FORM = "Forme de Voyage";
   KU_FLIGHT_FORM = "Forme de Vol";
   KU_GHOST_WOLF = "Loup fantÃ´me";
@@ -157,7 +157,7 @@ elseif ( GetLocale() == "deDE" ) then
   BINDING_NAME_KIKIUTILS_CAMERA = "Daoc freie Kameraansicht";
   BINDING_NAME_KIKIUTILS_SK = "Easy travel (Reittier oder Tiergestalt)";
   BINDING_NAME_KIKIUTILS_SKN = "Easy travel (non flying mount or travel form)";
-  BINDING_NAME_KIKIUTILS_SKB = "Easy shift: Wechsele Humanoid->Bär";
+  BINDING_NAME_KIKIUTILS_SKB = "Easy shift: Wechsele Humanoid->Bï¿½r";
   BINDING_NAME_KIKIUTILS_SKC = "Easy shift: Wechsele Humanoid->Katze";
   BINDING_NAME_KIKIUTILS_SKT = "Easy shift: Wechsele Humanoid->Gepard";
   BINDING_NAME_KIKIUTILS_SKA = "Easy shift: Wechsele Humanoid->Wassergestalt";
@@ -170,7 +170,7 @@ elseif ( GetLocale() == "deDE" ) then
   BINDING_NAME_KIKIUTILS_MLFIXLEFT = "Internal use - LEFT (END)";
   BINDING_NAME_KIKIUTILS_MLFIXRIGHT = "Internal use - RIGHT (HOME)";
   -- => Displayed strings
-  KU_CHAT_MISC_LOADED = "Geladen ! (/ku für Hilfe)";
+  KU_CHAT_MISC_LOADED = "Geladen ! (/ku fï¿½r Hilfe)";
   KU_CHAT_ATTACK_GAIN_ON = "Shows extra attacks gains";
   KU_CHAT_ATTACK_GAIN_OFF = "No longer shows extra attacks gains"
   KU_GRYPHON_HIDDEN = "Side gryphons are now hidden";
@@ -216,7 +216,7 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_HELP_TRACK = "Gibt eine Warnmeldung aus wenn keine Zielsuche aktiviert ist";
   KU_CHAT_HELP_LEVEL = "Shows or not, quest levels in quest log";
   KU_CHAT_HELP_BAGS = "Adjust bags position in the bottom right corner of the screen";
-  KU_CHAT_HELP_TARGETS = "Maximale Anzahl der Ziele für die KU_TotemKiller Funktion";
+  KU_CHAT_HELP_TARGETS = "Maximale Anzahl der Ziele fï¿½r die KU_TotemKiller Funktion";
   KU_CHAT_HELP_MOUNT_NAME = "Reittier Name";
   KU_CHAT_HELP_MOUNTS = "Lists all registered mounts";
   KU_CHAT_HELP_MOUNT_ADD = "Adds a mount using specified partial name";
@@ -240,7 +240,7 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_HELP_TARGET_DODGE = "Plays a sound when your target dodges an attack";
   KU_CHAT_HELP_YOU_PARRY = "Plays a sound when you parry an attack";
   KU_CHAT_HELP_BFMM = "Shows the battlefield minimap (even in the outside world!)";
-  KU_CHAT_CMD_PARAM_ERROR = "Falscher oder fehlender Parameter für Befehl ";
+  KU_CHAT_CMD_PARAM_ERROR = "Falscher oder fehlender Parameter fï¿½r Befehl ";
   KU_CHAT_CMD_UNKNOWN = "Unbekannter /ak Befehl (versuche /ak help)";
   KU_CHAT_TRACK_WARN = "Du hast keine aktive Zielsuche !";
   KU_CHAT_NO_MOUNT = "Kein Reittier definiert. Benutze /ku addmount <Reittier Name>";
@@ -248,7 +248,7 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_SB_SPELL_ASSIGNED = "Binding to key '%s' activated: Type='%s' Name='%s' Target='%s'"; -- $1=key $2=type $3=name $4=unit
   KU_CHAT_SB_SPELL_REMOVED = "Binding '%s' removed (key was '%s')."; -- $1=name $2=key
   KU_CHAT_SB_MULTIPLE_SPELLS_FOUND = "Multiple spells found with partial name '%s'. Give a more specific name."; -- $1=partial_spell_name
-  KU_CHAT_SB_SPELL_NOT_FOUND = "Binding n°%d not found. Use '/ku binds' to get list of active bindings."; -- $1=index
+  KU_CHAT_SB_SPELL_NOT_FOUND = "Binding nï¿½%d not found. Use '/ku binds' to get list of active bindings."; -- $1=index
   KU_CHAT_SB_SPELLS_LISTING_START = "Spell bindings listing:";
   KU_CHAT_SB_SPELLS_LISTING_END = "End of List";
   KU_CHAT_SB_SPELLS_LISTING_ITEM = " %d- '%s' assigned to key '%s'"; -- $1=spell $2=key
@@ -390,7 +390,7 @@ else
   KU_CHAT_SB_SPELL_ASSIGNED = "Binding to key '%s' activated: Type='%s' Name='%s' Target='%s'"; -- $1=key $2=type $3=name $4=unit
   KU_CHAT_SB_SPELL_REMOVED = "Binding '%s' removed (key was '%s')."; -- $1=name $2=key
   KU_CHAT_SB_MULTIPLE_SPELLS_FOUND = "Multiple spells found with partial name '%s'. Give a more specific name."; -- $1=partial_spell_name
-  KU_CHAT_SB_SPELL_NOT_FOUND = "Binding n°%d not found. Use '/ku binds' to get list of active bindings."; -- $1=index
+  KU_CHAT_SB_SPELL_NOT_FOUND = "Binding nï¿½%d not found. Use '/ku binds' to get list of active bindings."; -- $1=index
   KU_CHAT_SB_SPELLS_LISTING_START = "Spell bindings listing:";
   KU_CHAT_SB_SPELLS_LISTING_END = "End of List";
   KU_CHAT_SB_SPELLS_LISTING_ITEM = " %d- '%s' assigned to key '%s'"; -- $1=spell $2=key
