@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 10.0
+    Version 11.0
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -120,6 +120,8 @@ Kiki Utils by Kiki
 	   - Oct, 26th 2016: Fixed invalid key binding after spec change
 	  - 10.0:
 	   - June, 24th 2017: Fixed mount commands, spell command
+	  - 11.0:
+	   - September, 28th 2020: SL Support
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -329,6 +331,9 @@ local function KU_GetScreenHeight(col)
 end
 
 function KU_updateContainerFrameAnchors()
+  local CONTAINER_WIDTH = 192
+  local CONTAINER_SCALE = 0.75
+  local VISIBLE_CONTAINER_SPACING = 3
   local CONTAINER_OFFSET_Y = KU_GetToonConfigInt("AdjustBags",70);
 	local containerScale = KU_GetToonConfigInt("ScaleBags",1.0);
 	local frame, xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
