@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 11.0
+    Version 11.1
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -122,6 +122,8 @@ Kiki Utils by Kiki
 	   - June, 24th 2017: Fixed mount commands, spell command
 	  - 11.0:
 	   - September, 28th 2020: SL Support
+	  - 11.1:
+	   - December, 29th 2020: Added purge to smart dispel keybind for shaman. Fixed Battlefield Minimap (/ku bfmm)
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -930,11 +932,7 @@ local function KU_Commands(command)
     end
   elseif(cmd == "bfmm")
   then
-    if(not IsAddOnLoaded("Blizzard_BattlefieldMinimap"))
-    then
-      LoadAddOn("Blizzard_BattlefieldMinimap");
-    end
-    BattlefieldMinimap:Show();
+    ToggleBattlefieldMap()
   elseif(cmd == "spell")
   then
     local _, _, _, spellid = strfind(param, "|c%x+|H(spell:(%d+):%d*)|h%[.-%]|h|r");
@@ -2749,7 +2747,7 @@ function _KU_CreateMountMacros(landmount,flymount)
   local death_advance = nil;
   local rush_name = nil;
   local blink_name = nil;
-  
+
   if(landmount == GetSpellInfo(75207)) -- Abyssal Searhorse
   then
     swim_add = ",swimming";
@@ -2800,13 +2798,19 @@ function _KU_CreateMountMacros(landmount,flymount)
   
   -- OOC Macro
   macrotext = "";
+  if(C_Covenants.GetActiveCovenantID() == 3)
+  then
+    local numForms = GetNumShapeshiftForms()
+    macrotext = macrotext .. "/cast [stance:"..tostring(numForms+1).."]"..GetSpellInfo(324701).."\n/stopmacro [stance:"..tostring(numForms+1).."]\n"; -- Flicker
+  end
+
   if(landmount)
   then
     if(flymount)
     then
-      macrotext = "/use ["..mount_add.."nomounted,noswimming"..nocombat_add..flyable_add.."]"..flymount..";["..mount_add.."nomounted"..nocombat_add..swim_add.."]"..landmount.."\n";
+      macrotext = macrotext .. "/use ["..mount_add.."nomounted,noswimming"..nocombat_add..flyable_add.."]"..flymount..";["..mount_add.."nomounted"..nocombat_add..swim_add.."]"..landmount.."\n";
     else
-      macrotext = "/use ["..mount_add.."nomounted,noswimming"..nocombat_add.."]"..landmount.."\n";
+      macrotext = macrotext .. "/use ["..mount_add.."nomounted,noswimming"..nocombat_add.."]"..landmount.."\n";
     end
   end
   if(travel_name)
@@ -3081,7 +3085,10 @@ local function KikiUtils_SetupCure()
   local _,cls = UnitClass("player");
   if(cls == "SHAMAN")
   then
-    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",51886); -- Cleanse Spirit (Curse/Magic)
+    local dispelSpell = GetSpellInfo(51886) -- Cleanse Spirit (Curse/Magic)
+    local purgeSpell = GetSpellInfo(370) -- Purge
+    local macroText = "/cast [harm] "..purgeSpell.." ; "..dispelSpell;
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "DRUID")
   then
     local healSpell = GetSpellInfo(88423) -- Nature's Cure
