@@ -33,6 +33,8 @@ if ( GetLocale() == "frFR" ) then
   KU_CHAT_ATTACK_GAIN_OFF = "N'affiche plus les gains d'attaques supplémentaires"
   KU_GRYPHON_HIDDEN = "Les griffons lateraux sont maintenant cachés";
   KU_GRYPHON_SHOWN = "Les griffons lateraux sont affichés";
+  KU_SPELL_ACT_OVRL_HIDDEN = "La fenêtre de sur-impression pour l'activation des sorts est maintenant cachée";
+  KU_SPELL_ACT_OVRL_SHOWN = "La fenêtre de sur-impression pour l'activation des sorts est maintenant affichée";
   KU_CLASS_BAR_HIDDEN = "La barre spécifique de classe est maintenant cachée";
   KU_CLASS_BAR_SHOWN = "La barre spécifique de classe est affichée";
   KU_CHAT_SHAPEFIGHT_ON = "Le passage automatique en mode combat après métamorphose est activé";
@@ -67,6 +69,7 @@ if ( GetLocale() == "frFR" ) then
   KU_CHAT_YOU_PARRY_OFF = "Ne joue plus de son lorsque vous parez votre cible";
   KU_CHAT_HELP_ATTACK_GAIN = "Affiche ou non les gains d'attaques supplémentaires";
   KU_CHAT_HELP_GRYPHON = "Cache ou non les griffons lateraux";
+  KU_CHAT_HELP_SAO = "Cache ou non la fenêtre de sur-impression de l'activation des sorts";
   KU_CHAT_HELP_CLASSBAR = "Cache ou non les barres spécifiques aux classes";
   KU_CHAT_HELP_FIGHT = "Passe automatiquement en mode combat après une métamorphose (si vous ciblez un ennemi)";
   KU_CHAT_HELP_CLOCK = "Affiche ou non l’horloge simple";
@@ -175,6 +178,8 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_ATTACK_GAIN_OFF = "No longer shows extra attacks gains"
   KU_GRYPHON_HIDDEN = "Side gryphons are now hidden";
   KU_GRYPHON_SHOWN = "Side gryphons are now shown";
+  KU_SPELL_ACT_OVRL_HIDDEN = "Spell activation overlay is now hidden";
+  KU_SPELL_ACT_OVRL_SHOWN = "Spell activation overlay is now shown";
   KU_CLASS_BAR_HIDDEN = "Klassenspezifische Leiste wird nicht angezeigt";
   KU_CLASS_BAR_SHOWN = "Klassenspezifische Leiste wird angezeigt";
   KU_CHAT_SHAPEFIGHT_ON = "Automatischer Kampfmodus nach Formwechsel ist aktiviert";
@@ -209,6 +214,7 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_YOU_PARRY_OFF = "Won't play a sound when you parry an attack";
   KU_CHAT_HELP_ATTACK_GAIN = "Shows or not extra attacks gains";
   KU_CHAT_HELP_GRYPHON = "Hide or not side gryphons";
+  KU_CHAT_HELP_SAO = "Hide or not the spell activation overlay";
   KU_CHAT_HELP_CLASSBAR = "Verstecke oder zeige Klassenspezifische Leisten";
   KU_CHAT_HELP_FIGHT = "Automatischer Kampfmodus nach Formwechsel (wenn ein Feind als Ziel gesetzt ist)";
   KU_CHAT_HELP_CLOCK = "Zeigt die einfache Uhr an oder nicht";
@@ -316,6 +322,8 @@ else
   KU_CHAT_ATTACK_GAIN_OFF = "No longer shows extra attacks gains"
   KU_GRYPHON_HIDDEN = "Side gryphons are now hidden";
   KU_GRYPHON_SHOWN = "Side gryphons are now shown";
+  KU_SPELL_ACT_OVRL_HIDDEN = "Spell activation overlay is now hidden";
+  KU_SPELL_ACT_OVRL_SHOWN = "Spell activation overlay is now shown";
   KU_CLASS_BAR_HIDDEN = "Class specific bar is now hidden";
   KU_CLASS_BAR_SHOWN = "Class specific bar is now shown";
   KU_CHAT_SHAPEFIGHT_ON = "Auto fight after shapeshift is Enabled";
@@ -350,6 +358,7 @@ else
   KU_CHAT_YOU_PARRY_OFF = "Won't play a sound when you parry an attack";
   KU_CHAT_HELP_ATTACK_GAIN = "Shows or not extra attacks gains";
   KU_CHAT_HELP_GRYPHON = "Hide or not side gryphons";
+  KU_CHAT_HELP_SAO = "Hide or not the spell activation overlay";
   KU_CHAT_HELP_CLASSBAR = "Hide or not the class specific bars";
   KU_CHAT_HELP_FIGHT = "Automatically enters Fight mode after a shapeshift (if you have an hostile target)";
   KU_CHAT_HELP_CLOCK = "Displays or not the simple clock";

@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 11.1
+    Version 11.2
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -124,6 +124,13 @@ Kiki Utils by Kiki
 	   - September, 28th 2020: SL Support
 	  - 11.1:
 	   - December, 29th 2020: Added purge to smart dispel keybind for shaman. Fixed Battlefield Minimap (/ku bfmm)
+	  - 11.2:
+	   - April, 7th 2021:
+	    - Added an option to hide blizzard spell activation overlay
+		- Added hunter tranqshot to dispel keybinding
+		- Fixed hunter autoshot
+		- Fixed monk mistweaving dispel keybinding
+		- Added option to auto change souldbinds (/ku sb)
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -174,6 +181,10 @@ KU_MouseLookOn = 0;
 KU_MouseCamera = 0;
 KU_MustToggleMouseLook = false;
 
+--------------- Local enums ---------------
+local EnumSoulBindCheck = { Nothing = 1, CheckOnly = 2, Apply = 3 }
+local EnumSoulBindType = { Spec = "Spec", PvP = "PvP", Instance = "Instance", Raid = "Raid" }
+
 --------------- Local variables ---------------
 local KU_VERSION = GetAddOnMetadata("KikiUtils", "Version");
 local KU_IS_ATTACK = 0;
@@ -194,6 +205,13 @@ local KU_IsPaladin = false;
 local KU_IsDK = false;
 local KU_IsDH = false;
 local KU_IsGhostWolf = 0;
+local KU_CurrentTime = 0;
+local KU_TimeLastSouldBindPathApplied = 0;
+local KU_TimeToCheckForSoulbind = 0;
+local KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Nothing;
+local KU_SoulBindTypeToApply = EnumSoulBindType.Spec;
+local KU_SoulBindPathsToApply = {};
+local KU_SoulBindIDToApply = 0;
 local KU_MustSwapDefaultIdol = false;
 local KU_GainAttacks = "";
 local KU_CurrentZone = nil;
@@ -226,6 +244,9 @@ local KU_MustRestoreMusic = false;
 local KU_FROSTWOLF_WAR_WOLF_SPELLID = 164222;
 local KU_SPEED_OF_LIGHT_SPELLID = 85499;
 local KU_DIVINE_STEED_SPELLID = 190784;
+local KU_NextRaidTargetPosition = 1;
+local KU_RaidTargetGUIDs = {};
+local KU_RaidTargetCycleOrderIndex = { 7, 2, 1, 4, 3, 5 }
 
 local strfind = string.find;
 local strupper = string.upper;
@@ -427,18 +448,16 @@ local function KU_CheckRestoreMusic()
   end
 end
 
-local function KU_CheckTalentSpec()
-  if(KU_NeedInitToonSpecific) -- Not init yet
-  then
-    return;
-  end
+local function KU_CheckTalentTree(fromTalentChange)
   local tree = GetSpecialization();
+  local firstTime = false
   if(KU_ActiveTree == nil) -- First time
   then
     if(not tree or tree == 0) -- To prevent Bliz bug (PLAYER_TALENT_UPDATE is triggered when you zone)
     then
       return;
     end
+    firstTime = true
   end
 
   if(KU_ActiveTree ~= tree) -- First time, or spec changed
@@ -447,6 +466,17 @@ local function KU_CheckTalentSpec()
     KU_ActiveTree = tree;
     -- Setup new bindings
     KU_BindingsSetKeys();
+    -- Check Soulbind tree in a second
+    if firstTime or not fromTalentChange
+    then
+      KU_NeedToCheckForSoulbind = EnumSoulBindCheck.CheckOnly
+      KU_SoulBindTypeToApply = EnumSoulBindType.Spec
+      KU_TimeToCheckForSoulbind = KU_CurrentTime + 6.0
+    else
+      KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Apply
+      KU_SoulBindTypeToApply = EnumSoulBindType.Spec
+      KU_TimeToCheckForSoulbind = KU_CurrentTime + 0.5
+    end
   end
 end
 
@@ -485,6 +515,140 @@ local function KU_ImportGlobalConfig()
       KU_InitDefaults();
     else
       KU_InitDefaults();
+    end
+  end
+end
+
+local function KU_GetSelectedSoulBindBranches(soulbindID)
+  local tree = KU_BuildSoulBindTree(soulbindID)
+
+  local selectedNodes = {}
+  local singleChoice = true
+
+  for _,nodes in ipairs(tree)
+  do
+    if #nodes > 1
+    then
+      if singleChoice == true
+      then
+        for _,node in ipairs(nodes)
+        do
+          if node.state == Enum.SoulbindNodeState.Selected
+          then
+            tinsert(selectedNodes, node.ID)
+          end
+        end
+        singleChoice = false
+      end
+    else
+      singleChoice = true
+    end
+  end
+
+  return selectedNodes
+end
+
+local function KU_ApplySouldBindBranches(soulbindID, selectedNodes, checkOnly)
+  local currentNodes = KU_GetSelectedSoulBindBranches(soulbindID)
+  KU_SoulBindIDToApply = soulbindID
+  KU_SoulBindPathsToApply = {}
+  for i,nodeID in ipairs(selectedNodes)
+  do
+    if currentNodes[i] ~= nodeID
+    then
+      tinsert(KU_SoulBindPathsToApply, nodeID)
+    end
+  end
+
+  if #KU_SoulBindPathsToApply == 0
+  then
+    if not checkOnly
+    then
+      KU_ChatPrint("Soulbind Path already set", 0.2, 1.0, 0.2)
+    end
+  else
+    if checkOnly
+    then
+      KU_Announce("Soulbind Path is not the correct one for type "..KU_SoulBindTypeToApply, 1.0, 0.2, 0.2)
+      KU_SoulBindPathsToApply = {}
+      return
+    end
+
+    if C_Soulbinds.CanSwitchActiveSoulbindTreeBranch()
+    then
+      local sbName = C_Soulbinds.GetSoulbindData(soulbindID).name
+      KU_ChatPrint("Changing Soulbind Path for "..sbName..": "..tostring(#KU_SoulBindPathsToApply).." to change")
+    else
+      KU_SoulBindPathsToApply = {}
+      KU_Announce("WARNING: Cannot change Soulbind Path, "..tostring(#KU_SoulBindPathsToApply).." should be changed!", 1.0, 0.1, 0.1)
+    end
+  end
+end
+
+local function KU_CheckApplySoulBind()
+  if KU_NeedToCheckForSoulbind ~= EnumSoulBindCheck.Nothing and KU_CurrentTime >= KU_TimeToCheckForSoulbind
+  then
+    local action = KU_NeedToCheckForSoulbind
+    KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Nothing
+
+    local sb = KU_GetSoulBinds()
+    local sbType = sb[KU_SoulBindTypeToApply]
+    if sbType ~= nil
+    then
+      local currentID = C_Soulbinds.GetActiveSoulbindID()
+      if sbType.ID ~= currentID
+      then
+        local sbName = C_Soulbinds.GetSoulbindData(sbType.ID).name
+        if action == EnumSoulBindCheck.CheckOnly
+        then
+          KU_Announce("Current Soulbind is "..C_Soulbinds.GetSoulbindData(currentID).name.." instead of "..sbName, 1.0, 0.2, 0.2)
+          return
+        end
+        local canActivate, reason = C_Soulbinds.CanActivateSoulbind(sbType.ID)
+        if canActivate
+        then
+          KU_ChatPrint("Activating Soulbind "..sbName)
+          C_Soulbinds.ActivateSoulbind(sbType.ID)
+        else
+          KU_Announce("WARNING: Cannot change Soulbind to "..sbName..": "..reason, 1.0, 0.1, 0.1)
+          return
+        end
+      end
+      -- Add a small delay
+      KU_TimeLastSouldBindPathApplied = KU_CurrentTime
+      KU_ApplySouldBindBranches(sbType.ID, sbType.branches, action == EnumSoulBindCheck.CheckOnly)
+    end
+  end
+end
+
+local function KU_CheckApplySoulBindBranches()
+  if KU_CurrentTime >= (KU_TimeLastSouldBindPathApplied + 1.5)
+  then
+    if #KU_SoulBindPathsToApply > 0
+    then
+      local currentID = C_Soulbinds.GetActiveSoulbindID()
+      if currentID ~= KU_SoulBindIDToApply
+      then
+        KU_SoulBindPathsToApply = {}
+        KU_Announce("WARNING: Cannot change Soulbind Path, wrong Soulbind active!", 1.0, 0.2, 0.2)
+        return
+      end
+
+      local sbName = C_Soulbinds.GetSoulbindData(currentID).name
+      local nodeID = tremove(KU_SoulBindPathsToApply)
+      local node = C_Soulbinds.GetNode(nodeID)
+      local spellID = node.spellID
+      if spellID == 0
+      then
+        spellID = C_Soulbinds.GetConduitSpellID(node.conduitID, node.conduitRank)
+      end
+      KU_ChatPrint(" - Changing branch to "..tostring(GetSpellLink(spellID)).." for "..sbName)
+      C_Soulbinds.SelectNode(nodeID)
+      KU_TimeLastSouldBindPathApplied = KU_CurrentTime
+      if #KU_SoulBindPathsToApply == 0
+      then
+        KU_ChatPrint("Soulbind Path applied", 0.2, 1.0, 0.2)
+      end
     end
   end
 end
@@ -635,6 +799,23 @@ local function KU_SetNewGryphon(printmsg)
   end
 end
 
+local function KU_SetNewSpellActivationOverlay(printmsg)
+  if(KU_GetToonConfig("HideSpellActivationOverlay"))
+  then
+    if(printmsg)
+    then
+      KU_ChatPrint(KU_SPELL_ACT_OVRL_HIDDEN);
+    end
+    SpellActivationOverlayFrame:Hide();
+  else
+    if(printmsg)
+    then
+      KU_ChatPrint(KU_SPELL_ACT_OVRL_SHOWN);
+    end
+    SpellActivationOverlayFrame:Show();
+  end
+end
+
 local function KU_SetNewClassBar(printmsg)
 if(true) then return end -- Feature disabled
   if(KU_GetToonConfig("HideClassBar"))
@@ -749,6 +930,39 @@ local function KU_SetNewBags(printmsg)
   end
 end
 
+local function KU_LossOfControlFrame_OnLoad(frame)
+  local lossPos = KU_GetToonConfigString("LossOfControl");
+  local _,_,x,y = strfind(lossPos, "^(-*[0-9]+),(-*[0-9]+)$");
+  LossOfControlFrame:ClearAllPoints()
+  LossOfControlFrame:SetPoint("CENTER",UIParent,"CENTER",tonumber(x),tonumber(y))
+end
+
+local function KU_SetNewLossOfControl(printmsg)
+  local lossPos = KU_GetToonConfigString("LossOfControl");
+  if(lossPos ~= "")
+  then
+    -- Parse values
+    local _,_,x,y = strfind(lossPos, "^(-*[0-9]+),(-*[0-9]+)$");
+    if(printmsg)
+    then
+      KU_ChatPrint("Auto-setting Loss Of Control position to "..x..","..y);
+    end
+    if LossOfControlFrame
+    then
+      LossOfControlFrame:ClearAllPoints()
+      LossOfControlFrame:SetPoint("CENTER",UIParent,"CENTER",tonumber(x),tonumber(y))
+    end
+    hooksecurefunc("LossOfControlFrame_OnLoad",KU_LossOfControlFrame_OnLoad);
+  else
+    if(printmsg)
+    then
+      KU_ChatPrint("No longer setting Loss Of Control Position");
+    end
+    LossOfControlFrame:ClearAllPoints()
+    LossOfControlFrame:SetPoint("CENTER",UIParent,"CENTER",0,-200)
+  end
+end
+
 local function KU_SetNewSwapIdol(printmsg)
   if(KU_GetToonConfig("SwapIdol"))
   then
@@ -856,6 +1070,8 @@ local function KU_Commands(command)
     if(KU_GetToonConfig("HideClassBar")) then cbHidden = "on"; end
     local grHidden = "off";
     if(KU_GetToonConfig("HideGryphon")) then grHidden = "on"; end
+    local saoHidden = "off";
+    if(KU_GetToonConfig("HideSpellActivationOverlay")) then saoHidden = "on"; end
     local clock = "off";
     if(KU_GetToonConfig("EnableClock")) then clock = "on"; end
     local clock_lock = "off";
@@ -887,6 +1103,7 @@ local function KU_Commands(command)
     if(KU_GetToonConfig("AutoDisableMusic")) then automusic = "on"; end
     KU_ChatPrint("Usage:");
     KU_ChatPrint("  |cffffffff/ku hidegryphon (on|off|toggle)|r |cff2040ff["..grHidden.."]|r - "..KU_CHAT_HELP_GRYPHON);
+    KU_ChatPrint("  |cffffffff/ku hidesao (on|off|toggle)|r |cff2040ff["..saoHidden.."]|r - "..KU_CHAT_HELP_SAO);
     --KU_ChatPrint("  |cffffffff/ku hidecb (on|off|toggle)|r |cff2040ff["..cbHidden.."]|r - "..KU_CHAT_HELP_CLASSBAR);
     KU_ChatPrint("  |cffffffff/ku clock (on|off|toggle)|r |cff2040ff["..clock.."]|r - "..KU_CHAT_HELP_CLOCK);
     KU_ChatPrint("  |cffffffff/ku lock (on|off|toggle)|r |cff2040ff["..clock_lock.."]|r - "..KU_CHAT_HELP_CLOCK_LOCK);
@@ -1000,6 +1217,9 @@ local function KU_Commands(command)
   elseif(cmd == "hidegryphon")
   then
     KU_Commands_ParamParse(param,"hidegryphon","HideGryphon",KU_SetNewGryphon);
+  elseif(cmd == "hidesao")
+  then
+    KU_Commands_ParamParse(param,"hidesao","HideSpellActivationOverlay",KU_SetNewSpellActivationOverlay);
   elseif(cmd == "hidecb")
   then
     --KU_Commands_ParamParse(param,"hidecb","HideClassBar",KU_SetNewClassBar);
@@ -1039,11 +1259,26 @@ local function KU_Commands(command)
       end
     end
     KU_SetNewBags(true);
-  elseif(cmd == "msbtarea")
+  elseif(cmd == "loc")
+  then
+    if(param == "") or (param == nil)
+    then
+      KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."loc");
+      return;
+    end
+    local _,_,x,y = strfind(param, "^(-*[0-9]+),(-*[0-9]+)$");
+    if x == nil or y == nil
+    then
+      KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."loc");
+      return;
+    end
+    KU_SetToonConfig("LossOfControl",param);
+    KU_SetNewLossOfControl(true);
+elseif(cmd == "msbtarea")
   then
     if((param == "") or (param == nil))
     then
-      KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."addmount");
+      KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."msbtarea");
       return;
     end;
     local param2 = strupper(param);
@@ -1421,6 +1656,43 @@ local function KU_Commands(command)
     end
     KU_ChatPrint(string.format(KU_CHAT_MOUNT_DEL_ERR,param));
 
+  elseif(cmd == "sb")
+  then
+    if param == "" or param == nil
+    then
+      KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."sb");
+      return;
+    end;
+    local sb = KU_GetSoulBinds()
+    if param == "save"
+    then
+      local soulbindID = C_Soulbinds.GetActiveSoulbindID()
+      local selected = KU_GetSelectedSoulBindBranches(soulbindID)
+      local typ = EnumSoulBindType.Spec
+      local sbType = sb[typ]
+      if sbType == nil
+      then
+        sb[typ] = {}
+        sbType = sb[typ]
+      end
+      sbType.ID = soulbindID
+      sbType.branches = selected
+      KU_ChatPrint("Saved current soulbind tree for type "..typ)
+    elseif param == "apply"
+    then
+      local typ = EnumSoulBindType.Spec
+      local sbType = sb[typ]
+      if sbType == nil
+      then
+        KU_ChatPrint("No save soulbind tree to apply for type "..typ)
+        return
+      end
+      KU_SoulBindTypeToApply = typ
+      KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Apply
+      KU_TimeToCheckForSoulbind = KU_CurrentTime
+    else
+      KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."sb "..param);
+    end
   elseif(cmd == "binds")
   then
     KU_BindingsList();
@@ -1799,18 +2071,18 @@ local function KikiUtils_StartInitVars()
     -- Initialize Toon specific stuff
     KU_PlayerOfRealm = playerName.." of "..GetRealmName();
     local _,clas = UnitClass("player");
-  if(clas == "DRUID")
-  then
+    if(clas == "DRUID")
+    then
       KU_IsDruid = true;
-  elseif(clas == "WARLOCK")
-  then
-    KU_IsWarlock = true;
-  elseif(clas == "MAGE")
-  then
+    elseif(clas == "WARLOCK")
+    then
+      KU_IsWarlock = true;
+    elseif(clas == "MAGE")
+    then
       KU_IsMage = true;
-  elseif(clas == "MONK")
-	then
-	  KU_IsMonk = true;
+    elseif(clas == "MONK")
+	  then
+	    KU_IsMonk = true;
     elseif(clas == "HUNTER")
     then
       KU_IsHunter = true;
@@ -1833,9 +2105,11 @@ local function KikiUtils_StartInitVars()
     KU_ImportGlobalConfig(); -- Check for Global->Local settings convertion
     KU_CheckConvertBindings();
     KU_SetNewGryphon(false);
+    KU_SetNewSpellActivationOverlay(false);
     KU_SetNewClassBar(false);
     KU_SetNewTrack(false);
     KU_SetNewBags(false);
+    KU_SetNewLossOfControl(false);
     --KU_SetClock(false);
     KU_SetClockLock(false);
     KU_SetNewYouDodge(false);
@@ -1844,6 +2118,7 @@ local function KikiUtils_StartInitVars()
     KU_SetNewYouParry(false);
     KU_SetNewSwapIdol(false);
     KU_SetNewDebugMode(false);
+    KU_CheckTalentTree(false);
     --
     CreateFrame("Frame","KU_PlayerPowerBarAltOverlay",PlayerPowerBarAlt,"KU_TextFrame");    
     --
@@ -2002,6 +2277,33 @@ function KU_HasRoleNotTank()
   return false;
 end
 
+local function KU_CheckSoulBindEnteringWorld()
+  local inInstance = IsInInstance()
+  if inInstance
+  then
+    local _,instanceType,difficulty = GetInstanceInfo()
+    -- Mythic = 23
+    if instanceType == "pvp"
+    then
+      kud("ENTERING INSTANCE: "..tostring(instanceType).." -> "..tostring(difficulty))
+      KU_SoulBindTypeToApply = EnumSoulBindType.PvP
+      KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Apply
+      KU_TimeToCheckForSoulbind = KU_CurrentTime + 0.5
+    elseif instanceType == "party"
+    then
+      KU_SoulBindTypeToApply = EnumSoulBindType.Instance
+      KU_NeedToCheckForSoulbind = EnumSoulBindCheck.CheckOnly
+      KU_TimeToCheckForSoulbind = KU_CurrentTime + 2.0
+    elseif instanceType == "raid"
+    then
+      kud("ENTERING INSTANCE: "..tostring(instanceType).." -> "..tostring(difficulty))
+      KU_SoulBindTypeToApply = EnumSoulBindType.Raid
+      KU_NeedToCheckForSoulbind = EnumSoulBindCheck.CheckOnly
+      KU_TimeToCheckForSoulbind = KU_CurrentTime + 2.0
+    end
+  end
+end
+
 function KikiUtils_OnEvent(self,event,...)
   if(event == "VARIABLES_LOADED")
   then
@@ -2014,7 +2316,6 @@ function KikiUtils_OnEvent(self,event,...)
       return;
     end
     KikiUtils_StartInitVars();
-    KU_CheckTalentSpec();
   end
 
   -- Check Tracking
@@ -2101,6 +2402,7 @@ function KikiUtils_OnEvent(self,event,...)
     KU_IS_COMBAT = 0;
     KU_IS_MOVING = 0;
     KU_LAST_SHAPE = -1;
+    KU_NextRaidTargetPosition = 1;
     KU_HasShapeChanged();
     -- Reset mouselook
     KU_FollowModeOn = 0;
@@ -2116,8 +2418,8 @@ function KikiUtils_OnEvent(self,event,...)
       KU_SetupMountMacros();
     end
     KU_SetClock(false);
-	LossOfControlFrame:ClearAllPoints();
-	LossOfControlFrame:SetPoint("CENTER",UIParent,"CENTER",0,-200);
+    -- Check for Soulbind
+    KU_CheckSoulBindEnteringWorld()
   elseif(event == "PLAYER_LEAVING_WORLD")
   then
     KU_CheckRestoreMusic();
@@ -2145,9 +2447,24 @@ function KikiUtils_OnEvent(self,event,...)
         end
       end
     end
+  elseif(event == "COMBAT_LOG_EVENT_UNFILTERED")
+  then
+    local _,eventType,_,_,_,_,_,destGUID = CombatLogGetCurrentEventInfo()
+    if (eventType == "UNIT_DIED" or eventType == "UNIT_DESTROYED") and destGUID and destGUID ~= ""
+    then
+      for idx,id in pairs(KU_RaidTargetGUIDs)
+      do
+        if destGUID == id
+        then
+          KU_RaidTargetGUIDs[idx] = nil
+          break
+        end
+      end
+    end
   elseif(event == "PLAYER_REGEN_DISABLED")
   then
     KU_IS_COMBAT = 1;
+    KU_NextRaidTargetPosition = 1;
     KU_CheckDisableMusic();
   elseif(event == "PLAYER_REGEN_ENABLED")
   then
@@ -2227,9 +2544,9 @@ function KikiUtils_OnEvent(self,event,...)
   elseif(event == "MACRO_ACTION_BLOCKED")
   then
     KU_ChatDebug("MACRO_ACTION_BLOCKED : Fct="..tostring(select(1,...)));
-  elseif(event == "PLAYER_TALENT_UPDATE") -- Warning: This event is triggered when you zone (but inbetween PLAYER_LEAVING_WORLD and PLAYER_ENTERING_WORLD)
+  elseif(event == "ACTIVE_TALENT_GROUP_CHANGED")
   then
-    KU_CheckTalentSpec();
+    KU_CheckTalentTree(true);
   end
 end
 
@@ -2306,12 +2623,13 @@ function KikiUtils_OnLoad(self)
   self:RegisterEvent("UNIT_AURA");
   self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS");
   self:RegisterEvent("VARIABLES_LOADED");
-  self:RegisterEvent("PLAYER_TALENT_UPDATE");
+  self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED");
   self:RegisterEvent("AUTOFOLLOW_BEGIN");
   self:RegisterEvent("AUTOFOLLOW_END");
   self:RegisterEvent("PLAYER_ENTERING_WORLD");
   self:RegisterEvent("PLAYER_TARGET_CHANGED");
   self:RegisterEvent("UNIT_FACTION");
+  self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
   self:RegisterEvent("PLAYER_REGEN_DISABLED");
   self:RegisterEvent("PLAYER_REGEN_ENABLED");
   self:RegisterEvent("BAG_UPDATE");
@@ -2337,6 +2655,53 @@ end
 
 
 --------------- Exported functions ---------------
+
+function KU_SetNextRaidTarget(unit)
+  local u = unit or "target"
+  if CanBeRaidTarget(u)
+  then
+    local guid = UnitGUID(u)
+
+    -- Clear GUID if target already has a symbol
+    for idx,id in pairs(KU_RaidTargetGUIDs)
+    do
+      if guid == id
+      then
+        KU_RaidTargetGUIDs[idx] = nil
+        SetRaidTarget(u, 0)
+        return
+      end
+    end
+
+    -- Then count elements
+    local usedMarkers = 0
+    for _,_ in pairs(KU_RaidTargetGUIDs)
+    do
+      usedMarkers = usedMarkers + 1
+    end
+
+    -- Check if all symbols are used
+    if usedMarkers >= #KU_RaidTargetCycleOrderIndex
+    then
+      local index = KU_RaidTargetCycleOrderIndex[KU_NextRaidTargetPosition]
+      KU_RaidTargetGUIDs[index] = nil
+      usedMarkers = usedMarkers - 1
+    end
+
+    -- Search for an available index
+    local index = 0
+    local next = KU_NextRaidTargetPosition
+    repeat
+      index = KU_RaidTargetCycleOrderIndex[next]
+      next = (next ~= #KU_RaidTargetCycleOrderIndex) and (next + 1) or 1
+    until KU_RaidTargetGUIDs[index] == nil
+    KU_RaidTargetGUIDs[index] = guid
+    SetRaidTarget(u, index)
+    KU_NextRaidTargetPosition = next
+  else
+    KU_ChatPrint("Cannot set raid target marker on "..tostring(unit))
+  end
+end
 
 function KU_IsAttacking()
   return KU_IS_ATTACK;
@@ -2510,6 +2875,56 @@ function KU_GetBindings()
     binds[KU_ActiveTree] = tree_binds;
   end
   return tree_binds;
+end
+
+function KU_GetSoulBinds()
+  local binds = KU_GetToonConfig("SoulBinds");
+  
+  if(type(binds) == "boolean")
+  then
+    binds = {};
+    KU_SetToonConfig("SoulBinds",binds);
+  end
+  
+  if(KU_ActiveTree == nil)
+  then
+    return nil;
+  end
+  
+  local tree_binds = binds[KU_ActiveTree];
+  if(tree_binds == nil)
+  then
+    tree_binds = {};
+    if(binds[0]) -- Use 'converted/no-tree' bindings
+    then
+      for _,bind in ipairs(binds[0])
+      do
+        tinsert(tree_binds,bind);
+      end
+    end
+    binds[KU_ActiveTree] = tree_binds;
+  end
+  return tree_binds;
+end
+
+-- /run for _,node in ipairs(C_Soulbinds.GetSoulbindData(C_Soulbinds.GetActiveSoulbindID()).tree.nodes) do print(node.row) end
+function KU_BuildSoulBindTree(soulbindID)
+  local sbID = soulbindID or C_Soulbinds.GetActiveSoulbindID()
+  local soulData = C_Soulbinds.GetSoulbindData(sbID)
+
+  local tree = {}
+
+  for _,node in ipairs(soulData.tree.nodes)
+  do
+    local index = node.row + 1
+    if tree[index] == nil
+    then
+      tree[index] = {}
+    end
+    tinsert(tree[index],node)
+  end
+
+  return tree
 end
 
 function KU_AddSpellBinding(action_type,action_name,action_unit,key)
@@ -2743,7 +3158,6 @@ function _KU_CreateMountMacros(landmount,flymount)
   local nocombat_add = ",nocombat";
   local swim_add = "";
   local roll_name = nil;
-  local tiger_lust = nil;
   local death_advance = nil;
   local rush_name = nil;
   local blink_name = nil;
@@ -2773,11 +3187,6 @@ function _KU_CreateMountMacros(landmount,flymount)
   if(KU_IsMonk)
   then
     roll_name = GetSpellInfo(109132); -- Roll
-    local has_tl,tl_name = KU_HasSpell(116841); -- Tiger's Lust
-    if(has_tl)
-    then
-      tiger_lust = tl_name;
-    end
   end
   
   if(KU_IsDK)
@@ -2787,7 +3196,10 @@ function _KU_CreateMountMacros(landmount,flymount)
 
   if(KU_IsDH)
   then
-    rush_name = GetSpellInfo(195072); -- Fel Rush
+    if KU_ActiveTree == 1
+    then
+      rush_name = GetSpellInfo(195072); -- Fel Rush
+    end
   end
 
   -- Fix for the macro combat bug (/use [nocombat] not always trigger when out of combat when having a pet)
@@ -2825,12 +3237,7 @@ function _KU_CreateMountMacros(landmount,flymount)
   end
   if(roll_name)
   then
-    if(tiger_lust)
-    then
-      macrotext = macrotext .. "/castsequence [nomounted] reset=10 "..tiger_lust..","..roll_name..","..roll_name..","..roll_name.."\n";
-    else
-      macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
-    end
+    macrotext = macrotext .. "/cast [nomounted]"..roll_name.."\n";
   end
   if(blink_name)
   then
@@ -2851,16 +3258,6 @@ function _KU_CreateMountMacros(landmount,flymount)
       macrotext = macrotext .. "/cast [nomounted,stance:0,combat]"..ghost.."\n" .. "/cancelaura [stance:1]"..ghost.."\n";
     else
       macrotext = macrotext .. "/cast [nomounted,stance:0]"..ghost.."\n" .. "/cancelaura [stance:1]"..ghost.."\n";
-    end
-  elseif(KU_IsHunter)
-  then
-    if(landmount) -- Have a mount, cast cheetah only in combat
-    then
-      --macrotext = macrotext .. "/castsequence "..KU_CHEETAH..","..KU_HAWK.."\n";
-      --macrotext = macrotext .. "/cast [nomounted,combat]"..KU_CHEETAH.."\n";
-      macrotext = macrotext .. "/castsequence [nomounted,combat] reset=combat "..KU_CHEETAH..","..KU_HAWK.."\n";
-    else
-      macrotext = macrotext .. "/castsequence "..KU_CHEETAH..","..KU_HAWK.."\n";
     end
   elseif(KU_IsPaladin)
   then
@@ -3015,17 +3412,9 @@ end
 -- Force Attack or AutoShot Secure Button
 ---------------------------------------------------
 function KU_SetupForceAttackMacro()
-  local shot = "";
-  
-  if(KU_IsHunter)
-  then
-    shot = KU_AUTOSHOT;
-  else
-    shot = KU_GetToonConfigString("ShotName");
-  end
-  
-  --local macrotext = "/dismount [mounted]\n/targetnearestennemy [noexists]\n/startattack\n";
-  local macrotext = "/targetnearestennemy [noexists]\n/startattack\n";
+  local shot = KU_GetToonConfigString("ShotName");
+
+  local macrotext = "/startattack\n";
   if(shot ~= "")
   then
     macrotext = macrotext .. "/cast [exists]"..shot;
@@ -3089,6 +3478,13 @@ local function KikiUtils_SetupCure()
     local purgeSpell = GetSpellInfo(370) -- Purge
     local macroText = "/cast [harm] "..purgeSpell.." ; "..dispelSpell;
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
+  elseif(cls == "HUNTER")
+  then
+    --local dispelSpell = GetSpellInfo(51886) -- Cleanse Spirit (Curse/Magic)
+    local tranqSpell = GetSpellInfo(19801) -- Tranquilizing Shot
+    --local macroText = "/cast [harm] "..tranqSpell.." ; "..dispelSpell;
+    local macroText = "/cast [harm] "..tranqSpell
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "DRUID")
   then
     local healSpell = GetSpellInfo(88423) -- Nature's Cure
@@ -3110,7 +3506,11 @@ local function KikiUtils_SetupCure()
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
   elseif(cls == "MONK")
   then
-    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",115450); -- Detox (Poison/Disease)
+    local dispelSpell = GetSpellInfo(115450) -- Detox (Poison/Disease)
+    local otherSpell = GetSpellInfo(116095) -- Disable
+    local macroText = "/cast [spec:3,harm] "..otherSpell.." ; "..dispelSpell;
+    KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",macroText);
+    --KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",115450); 
   elseif(cls == "DEMONHUNTER")
   then
     KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",278326); -- Consume Magic
@@ -3193,7 +3593,13 @@ local function evFrameOnEvent(self, event, ...)
     end
   end
 end
+local function evFrameOnUpdate(self,elapsed)
+  KU_CurrentTime = KU_CurrentTime + elapsed
+  KU_CheckApplySoulBind()
+  KU_CheckApplySoulBindBranches()
+end
 evFrame:SetScript("OnEvent", evFrameOnEvent);
+evFrame:SetScript("OnUpdate", evFrameOnUpdate);
 ------- Thanks to Iriel and DruidBar for the code
 
 function KU_CapDisplayOfNumericValue(value)
