@@ -3657,7 +3657,7 @@ end
 
 function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, value, valueMin, valueMax)
 	local fname = statusFrame:GetName();
-	if( (strfind(fname,"FrameHealthBar") or strfind(fname,"FrameManaBar")) and KU_GetToonConfig("ShowPercent") )
+	if(fname and (strfind(fname,"FrameHealthBar") or strfind(fname,"FrameManaBar")) and KU_GetToonConfig("ShowPercent") )
 	then
 		if ( ( tonumber(valueMax) ~= valueMax or valueMax > 0 ) and not ( statusFrame.pauseUpdates ) ) then
 			local valueDisplay = value;
