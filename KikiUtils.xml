@@ -17,4 +17,33 @@
   </Frame>
   
   <GameTooltip name="KU_Tooltip" inherits="GameTooltipTemplate" parent="UIParent" hidden="true"/>
+
+  <Frame name="KU_MMPingFrame" parent="UIParent">
+    <Size>
+      <AbsDimension x="80" y="15"/>
+    </Size>
+    <Anchors>
+      <Anchor point="TOPRIGHT" relativeTo="MinimapCluster" relativePoint="BOTTOMRIGHT">
+        <Offset>
+          <AbsDimension x="-45" y="10"/>
+        </Offset>
+      </Anchor>
+    </Anchors>
+    <Layers>
+      <Layer level="BACKGROUND">
+        <FontString name="KU_MMPingText" inherits="GameFontNormalSmall"/>
+      </Layer>
+    </Layers>
+    <Scripts>
+      <OnLoad>
+        KikiUtils_MMPing_OnLoad(self);
+      </OnLoad>
+      <OnEvent>
+        KikiUtils_MMPing_OnEvent(self,event,...);
+      </OnEvent>
+      <OnUpdate>
+        KikiUtils_MMPing_OnUpdate(self,elapsed);
+      </OnUpdate>
+    </Scripts>
+  </Frame>
 </Ui>

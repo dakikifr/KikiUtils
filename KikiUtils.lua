@@ -2610,13 +2610,13 @@ function KikiUtils_MMPing_OnEvent(self,event,...)
   if(event == "MINIMAP_PING")
   then
     local unit = ...;
-    if(unit ~= "player")
-    then
-      KU_MMPingText:SetText(UnitName(unit));
+    --if(unit ~= "player")
+    --then
+      KU_MMPingText:SetText("Ping: "..UnitName(unit));
       KU_MMPingText:SetTextColor(0.8,0.8,0.0);
       KU_MMPingText:Show();
       KU_MMPing_StartTime = GetTime();
-    end
+    --end
   end
 end
 
