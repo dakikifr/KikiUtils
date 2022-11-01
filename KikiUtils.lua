@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 11.3
+    Version 12.0
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -127,10 +127,13 @@ Kiki Utils by Kiki
 	  - 11.2:
 	   - April, 7th 2021:
 	    - Added an option to hide blizzard spell activation overlay
-		- Added hunter tranqshot to dispel keybinding
-		- Fixed hunter autoshot
-		- Fixed monk mistweaving dispel keybinding
-		- Added option to auto change souldbinds (/ku sb)
+      - Added hunter tranqshot to dispel keybinding
+      - Fixed hunter autoshot
+      - Fixed monk mistweaving dispel keybinding
+      - Added option to auto change souldbinds (/ku sb)
+    - 12.0:
+     - Nov, 1st 2022:
+      - Removed unused old code
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -489,7 +492,6 @@ end
 
 local function KU_InitDefaults()
   KU_CheckAndInitDefault("DebugMode",false);
-  KU_CheckAndInitDefault("HideGryphon",false);
   KU_CheckAndInitDefault("HideClassBar",false);
   KU_CheckAndInitDefault("EnableClock",true);
   KU_CheckAndInitDefault("LockClock",false);
@@ -780,25 +782,6 @@ local function KU_SetNewDebugMode(printmsg)
   end
 end
 
-local function KU_SetNewGryphon(printmsg)
-  if(KU_GetToonConfig("HideGryphon"))
-  then
-    if(printmsg)
-    then
-      KU_ChatPrint(KU_GRYPHON_HIDDEN);
-    end
-    MainMenuBarArtFrame.LeftEndCap:Hide();
-    MainMenuBarArtFrame.RightEndCap:Hide();
-  else
-    if(printmsg)
-    then
-      KU_ChatPrint(KU_GRYPHON_SHOWN);
-    end
-	MainMenuBarArtFrame.LeftEndCap:Show();
-	MainMenuBarArtFrame.RightEndCap:Show();
-  end
-end
-
 local function KU_SetNewSpellActivationOverlay(printmsg)
   if(KU_GetToonConfig("HideSpellActivationOverlay"))
   then
@@ -1068,8 +1051,6 @@ local function KU_Commands(command)
   then
     local cbHidden = "off";
     if(KU_GetToonConfig("HideClassBar")) then cbHidden = "on"; end
-    local grHidden = "off";
-    if(KU_GetToonConfig("HideGryphon")) then grHidden = "on"; end
     local saoHidden = "off";
     if(KU_GetToonConfig("HideSpellActivationOverlay")) then saoHidden = "on"; end
     local clock = "off";
@@ -1102,7 +1083,6 @@ local function KU_Commands(command)
     local automusic = "off";
     if(KU_GetToonConfig("AutoDisableMusic")) then automusic = "on"; end
     KU_ChatPrint("Usage:");
-    KU_ChatPrint("  |cffffffff/ku hidegryphon (on|off|toggle)|r |cff2040ff["..grHidden.."]|r - "..KU_CHAT_HELP_GRYPHON);
     KU_ChatPrint("  |cffffffff/ku hidesao (on|off|toggle)|r |cff2040ff["..saoHidden.."]|r - "..KU_CHAT_HELP_SAO);
     --KU_ChatPrint("  |cffffffff/ku hidecb (on|off|toggle)|r |cff2040ff["..cbHidden.."]|r - "..KU_CHAT_HELP_CLASSBAR);
     KU_ChatPrint("  |cffffffff/ku clock (on|off|toggle)|r |cff2040ff["..clock.."]|r - "..KU_CHAT_HELP_CLOCK);
@@ -1214,9 +1194,6 @@ local function KU_Commands(command)
   elseif(cmd == "automusic")
   then
     KU_Commands_ParamParse(param,"automusic","AutoDisableMusic",nil);
-  elseif(cmd == "hidegryphon")
-  then
-    KU_Commands_ParamParse(param,"hidegryphon","HideGryphon",KU_SetNewGryphon);
   elseif(cmd == "hidesao")
   then
     KU_Commands_ParamParse(param,"hidesao","HideSpellActivationOverlay",KU_SetNewSpellActivationOverlay);
@@ -2117,7 +2094,6 @@ local function KikiUtils_StartInitVars()
     end
     KU_ImportGlobalConfig(); -- Check for Global->Local settings convertion
     KU_CheckConvertBindings();
-    KU_SetNewGryphon(false);
     KU_SetNewSpellActivationOverlay(false);
     KU_SetNewClassBar(false);
     KU_SetNewTrack(false);
@@ -2132,8 +2108,6 @@ local function KikiUtils_StartInitVars()
     KU_SetNewSwapIdol(false);
     KU_SetNewDebugMode(false);
     KU_CheckTalentTree(false);
-    --
-    CreateFrame("Frame","KU_PlayerPowerBarAltOverlay",PlayerPowerBarAlt,"KU_TextFrame");    
     --
     KU_NeedInitToonSpecific = false;
     -- Check for Mounts convert
