@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 11.2
+    Version 11.3
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -591,7 +591,7 @@ local function KU_CheckApplySoulBind()
     local action = KU_NeedToCheckForSoulbind
     KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Nothing
 
-    local sb = KU_GetSoulBinds()
+    local sb = KU_GetSoulBinds(C_Covenants.GetActiveCovenantID())
     local sbType = sb[KU_SoulBindTypeToApply]
     if sbType ~= nil
     then
@@ -1663,7 +1663,7 @@ elseif(cmd == "msbtarea")
       KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR.."sb");
       return;
     end;
-    local sb = KU_GetSoulBinds()
+    local sb = KU_GetSoulBinds(C_Covenants.GetActiveCovenantID())
     if param == "save"
     then
       local soulbindID = C_Soulbinds.GetActiveSoulbindID()
@@ -1916,6 +1916,7 @@ function KU_GetMountToUse(dontgetflying)
   local flymount = nil;
 
    local inInstance,instanceType = IsInInstance();
+   local currentZoneID = KU_GetCurrentMapID(Enum.UIMapType.Zone)
 
   -- First check for BG mounts
   if(inInstance and instanceType == "pvp")
@@ -1944,6 +1945,18 @@ function KU_GetMountToUse(dontgetflying)
       end
     end
   end
+
+  --[[
+  -- Then check for The Maw
+  if currentZoneID == 1543 or currentZoneID == 1961 -- The Maw / Korthia
+  then
+    local has_creeper,creeper_name = KU_HasMount(344578) -- Corridor Creeper
+    if has_creeper
+    then
+      landmount = creeper_name
+    end
+  end
+  ]]
 
   -- Then check for abyssal sea horse
   if(KU_CurrentZone == KU_ZONE_KELPTHAR or KU_CurrentZone == KU_ZONE_SHIMMERING_EXPANSE or KU_CurrentZone == KU_ZONE_ABYSSAL_DEPTHS)
@@ -2277,6 +2290,27 @@ function KU_HasRoleNotTank()
   return false;
 end
 
+function KU_GetCurrentMapID(mapType)
+  local mType = mapType or Enum.UIMapType.Continent
+  local mapID = C_Map.GetBestMapForUnit("player")
+  if mapID
+  then
+    local info = C_Map.GetMapInfo(mapID)
+    if info
+    then
+      while info and info['mapType'] and info['mapType'] ~= mType
+      do
+        info = C_Map.GetMapInfo(info['parentMapID'])
+      end
+      if info and info['mapType'] == mType
+      then
+        return info['mapID']
+      end
+    end
+  end
+  return 0
+end
+
 local function KU_CheckSoulBindEnteringWorld()
   local inInstance = IsInInstance()
   if inInstance
@@ -2547,6 +2581,11 @@ function KikiUtils_OnEvent(self,event,...)
   elseif(event == "ACTIVE_TALENT_GROUP_CHANGED")
   then
     KU_CheckTalentTree(true);
+  elseif(event == "COVENANT_CHOSEN")
+  then
+    KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Apply
+    KU_SoulBindTypeToApply = EnumSoulBindType.Spec
+    KU_TimeToCheckForSoulbind = KU_CurrentTime + 0.5
   end
 end
 
@@ -2640,7 +2679,7 @@ function KikiUtils_OnLoad(self)
   --self:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF");
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA");
   --self:RegisterEvent("UNIT_POWER_BAR_SHOW");
-  --self:RegisterEvent("UNIT_POWER_BAR_HIDE");
+  self:RegisterEvent("COVENANT_CHOSEN");
 
   -- Initialize Slash commands
   SLASH_KU1 = "/ku";
@@ -2877,7 +2916,7 @@ function KU_GetBindings()
   return tree_binds;
 end
 
-function KU_GetSoulBinds()
+function KU_GetSoulBinds(covID)
   local binds = KU_GetToonConfig("SoulBinds");
   
   if(type(binds) == "boolean")
@@ -2890,7 +2929,7 @@ function KU_GetSoulBinds()
   then
     return nil;
   end
-  
+
   local tree_binds = binds[KU_ActiveTree];
   if(tree_binds == nil)
   then
@@ -2904,7 +2943,20 @@ function KU_GetSoulBinds()
     end
     binds[KU_ActiveTree] = tree_binds;
   end
-  return tree_binds;
+
+  local cov_binds = tree_binds[covID];
+  if(cov_binds == nil)
+  then
+    cov_binds = {};
+    if(tree_binds["Spec"]) -- Move Spec bindings if exists
+    then
+      cov_binds["Spec"] = tree_binds["Spec"];
+      tree_binds["Spec"] = nil;
+    end
+    tree_binds[covID] = cov_binds;
+  end
+
+  return cov_binds;
 end
 
 -- /run for _,node in ipairs(C_Soulbinds.GetSoulbindData(C_Soulbinds.GetActiveSoulbindID()).tree.nodes) do print(node.row) end
@@ -3657,15 +3709,17 @@ function KU_PrintPoints(frame)
 end
 
 function KU_HasMount(spellID)
-  for i=1,GetNumCompanions("MOUNT")
+  local mounts = C_MountJournal.GetMountIDs()
+  for _,id in ipairs(mounts)
   do
-    local creatureID, creatureName, creatureSpellID, icon, issummoned = GetCompanionInfo("MOUNT",i);
-    if(spellID == creatureSpellID)
+    local name,sID,icon,isActive,isUsable,sourceType,isFavorite,isFactionSpecific,faction,shouldHideOnChar,isCollected,mountID = C_MountJournal.GetMountInfoByID(id)
+    -- TODO: Check faction
+    if sID == spellID
     then
-      return true,creatureName;
+      return isCollected,name
     end
   end
-  return false,nil;
+  return false,name
 end
 
 function KU_HasSpell(spellID)
