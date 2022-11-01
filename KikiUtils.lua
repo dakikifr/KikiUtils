@@ -347,8 +347,8 @@ end
 
 --------------- Hooked functions ---------------
 
-local function KU_GetScreenHeight(col)
-  if(col == 0)
+local function KU_GetScreenHeight(firstCol)
+  if(firstCol)
   then
     return GetScreenHeight() - MinimapCluster:GetHeight() - 20;
   else
@@ -362,7 +362,7 @@ function KU_updateContainerFrameAnchors()
   local VISIBLE_CONTAINER_SPACING = 3
   local CONTAINER_OFFSET_Y = KU_GetToonConfigInt("AdjustBags",70);
 	local containerScale = KU_GetToonConfigInt("ScaleBags",1.0);
-	local frame, xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
+	local xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
 	local screenWidth = GetScreenWidth();
 	local leftLimit = 0;
 	if ( BankFrame:IsShown() ) then
@@ -370,7 +370,7 @@ function KU_updateContainerFrameAnchors()
 	end
 	
 	while ( containerScale > CONTAINER_SCALE ) do
-		screenHeight = KU_GetScreenHeight(0) / containerScale;
+		screenHeight = KU_GetScreenHeight(true) / containerScale;
 		-- Adjust the start anchor for bags depending on the multibars
 		xOffset = CONTAINER_OFFSET_X / containerScale; 
 		yOffset = CONTAINER_OFFSET_Y / containerScale; 
@@ -379,17 +379,29 @@ function KU_updateContainerFrameAnchors()
 		leftMostPoint = screenWidth - xOffset;
 		column = 1;
 		local frameHeight;
-		for index, frameName in ipairs(ContainerFrame1.bags) do
-			frameHeight = _G[frameName]:GetHeight();
+		local framesInColumn = 0;
+		local forceScaleDecrease = false;
+		for index, frame in ipairs(ContainerFrameSettingsManager:GetBagsShown()) do
+			framesInColumn = framesInColumn + 1;
+			frameHeight = frame:GetHeight(true);
 			if ( freeScreenHeight < frameHeight ) then
-				-- Start a new column
-				column = column + 1;
-				leftMostPoint = screenWidth - ( column * CONTAINER_WIDTH * containerScale ) - xOffset;
-				freeScreenHeight = screenHeight - yOffset;
+				if framesInColumn == 1 then
+					-- If this is the only frame in the column and it doesn't fit, then scale must be reduced and the iteration restarted
+					forceScaleDecrease = true;
+					break;
+				else
+					-- Start a new column
+					column = column + 1;
+					framesInColumn = 0; -- kind of a lie, at this point there's actually a single frame in the new column, but this simplifies where to increment.
+					leftMostPoint = screenWidth - ( column * frame:GetWidth(true) * containerScale ) - xOffset;
+					freeScreenHeight = screenHeight - yOffset;
+				end
 			end
-			freeScreenHeight = freeScreenHeight - frameHeight - VISIBLE_CONTAINER_SPACING;
+
+			freeScreenHeight = freeScreenHeight - frameHeight;
 		end
-		if ( leftMostPoint < leftLimit ) then
+
+		if forceScaleDecrease or (leftMostPoint < leftLimit) then
 			containerScale = containerScale - 0.01;
 		else
 			break;
@@ -400,31 +412,35 @@ function KU_updateContainerFrameAnchors()
 		containerScale = CONTAINER_SCALE;
 	end
 	
-	screenHeight = KU_GetScreenHeight(0) / containerScale;
+	local screenHeight = KU_GetScreenHeight(true) / containerScale;
 	-- Adjust the start anchor for bags depending on the multibars
-	xOffset = CONTAINER_OFFSET_X / containerScale;
-	yOffset = CONTAINER_OFFSET_Y / containerScale;
+	local xOffset = CONTAINER_OFFSET_X / containerScale;
+	local yOffset = CONTAINER_OFFSET_Y / containerScale;
 	-- freeScreenHeight determines when to start a new column of bags
-	freeScreenHeight = screenHeight - yOffset;
-	column = 0;
-	for index, frameName in ipairs(ContainerFrame1.bags) do
-		frame = _G[frameName];
+	local freeScreenHeight = screenHeight - yOffset;
+	local previousBag;
+	local firstBagInMostRecentColumn;
+	for index, frame in ipairs(ContainerFrameSettingsManager:GetBagsShown()) do
 		frame:SetScale(containerScale);
-		if ( index == 1 ) then
+		if index == 1 then
 			-- First bag
-			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT", -xOffset, yOffset );
-		elseif ( freeScreenHeight < frame:GetHeight() ) then
+			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT", -xOffset, yOffset);
+			firstBagInMostRecentColumn = frame;
+		elseif (freeScreenHeight < frame:GetHeight()) or previousBag:IsCombinedBagContainer() then
 			-- Start a new column
-			column = column + 1;
-			screenHeight = KU_GetScreenHeight(column) / containerScale;
+      screenHeight = KU_GetScreenHeight(false) / containerScale
 			freeScreenHeight = screenHeight - yOffset;
-			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT", -(column * CONTAINER_WIDTH) - xOffset, yOffset );
+			frame:SetPoint("BOTTOMRIGHT", firstBagInMostRecentColumn, "BOTTOMLEFT", -11, 0);
+			firstBagInMostRecentColumn = frame;
 		else
 			-- Anchor to the previous bag
-			frame:SetPoint("BOTTOMRIGHT", ContainerFrame1.bags[index - 1], "TOPRIGHT", 0, CONTAINER_SPACING);	
+			frame:SetPoint("BOTTOMRIGHT", previousBag, "TOPRIGHT", 0, CONTAINER_SPACING);
 		end
-		freeScreenHeight = freeScreenHeight - frame:GetHeight() - VISIBLE_CONTAINER_SPACING;
+
+		previousBag = frame;
+		freeScreenHeight = freeScreenHeight - frame:GetHeight();
 	end
+
 end
 
 --------------- Init functions ---------------
