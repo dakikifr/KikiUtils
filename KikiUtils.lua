@@ -3067,6 +3067,9 @@ function KU_BindingsSetKeys()
       if(button == nil)
       then
         button = CreateFrame("Button","KU_SB"..i,UIParent,"SecureActionButtonTemplate");
+        button:SetWidth(1);
+        button:SetHeight(1);
+        button:RegisterForClicks("AnyUp", "AnyDown");
       end
       button:SetAttribute("type",infos.type);
       if(infos.unit ~= "none") then
@@ -3358,8 +3361,8 @@ function KikiUtils_RefreshStance()
         b = CreateFrame("Button", "KU_SSEB" .. i,UIParent,"SecureActionButtonTemplate");
         b:SetWidth(1);
         b:SetHeight(1);
+        b:RegisterForClicks("AnyUp", "AnyDown");
         b:SetAttribute("type","macro");
-        --b:RegisterForClicks("LeftButtonUp");
         STANCE_BUTTONS[i] = b;
       end
       local key = nil;
@@ -3399,6 +3402,7 @@ function KikiUtils_RefreshStance()
       b = CreateFrame("Button", "KU_SSEB1", UIParent,"SecureActionButtonTemplate");
       b:SetWidth(1);
       b:SetHeight(1);
+      b:RegisterForClicks("AnyUp", "AnyDown");
       STANCE_BUTTONS[1] = b;
     end
     ClearOverrideBindings(b);
@@ -3419,12 +3423,12 @@ function KikiUtils_RefreshStance()
     CreateFrame("Button", "KU_ETB", UIParent,"SecureActionButtonTemplate");
     KU_ETB:SetWidth(1);
     KU_ETB:SetHeight(1);
-    --KU_ETB:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+    KU_ETB:RegisterForClicks("AnyUp", "AnyDown");
     KU_ETB:SetAttribute("type","macro");
     CreateFrame("Button", "KU_ETBN", UIParent,"SecureActionButtonTemplate");
     KU_ETBN:SetWidth(1);
     KU_ETBN:SetHeight(1);
-    --KU_ETBN:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+    KU_ETBN:RegisterForClicks("AnyUp", "AnyDown");
     KU_ETBN:SetAttribute("type","macro");
   end    
   -- Set key overriding for easy travel
@@ -3471,6 +3475,7 @@ local function KikiUtils_ForceAttack_Init()
     CreateFrame("Button", "KU_FAB", UIParent,"SecureActionButtonTemplate");
     KU_FAB:SetWidth(1);
     KU_FAB:SetHeight(1);
+    KU_FAB:RegisterForClicks("AnyUp", "AnyDown");
   end    
   -- Set key overriding for force-attack-or-shot
   ClearOverrideBindings(KU_FAB);
@@ -3492,6 +3497,7 @@ local function KikiUtils_SetupCureButton(button,name,key_name,spellID)
     button = CreateFrame("Button", name, UIParent,"SecureActionButtonTemplate");
     button:SetWidth(1);
     button:SetHeight(1);
+    button:RegisterForClicks("AnyUp", "AnyDown");
   end
   ClearOverrideBindings(button);
   -- Set key overriding
@@ -3573,6 +3579,7 @@ local function KikiUtils_SetupRaidTarget()
     KU_RTB = CreateFrame("Button", "KU_RTB", UIParent,"SecureActionButtonTemplate");
     KU_RTB:SetWidth(1);
     KU_RTB:SetHeight(1);
+    KU_RTB:RegisterForClicks("AnyUp", "AnyDown");
   end
   ClearOverrideBindings(KU_RTB);
   -- Set key overriding
