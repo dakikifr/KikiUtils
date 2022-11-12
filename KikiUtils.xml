@@ -18,20 +18,20 @@
   
   <GameTooltip name="KU_Tooltip" inherits="GameTooltipTemplate" parent="UIParent" hidden="true"/>
 
-  <Frame name="KU_MMPingFrame" enableMouse="false" parent="UIParent">
+  <Frame name="KU_MMPingFrame" parent="UIParent">
     <Size>
       <AbsDimension x="80" y="15"/>
     </Size>
     <Anchors>
       <Anchor point="TOPRIGHT" relativeTo="MinimapCluster" relativePoint="BOTTOMRIGHT">
         <Offset>
-          <AbsDimension x="-45" y="15"/>
+          <AbsDimension x="-45" y="10"/>
         </Offset>
       </Anchor>
     </Anchors>
     <Layers>
-      <Layer level="BACKGROUND" enableMouse="false">
-        <FontString name="KU_MMPingText" inherits="GameFontNormalSmall" enableMouse="false" />
+      <Layer level="BACKGROUND">
+        <FontString name="KU_MMPingText" inherits="GameFontNormalSmall"/>
       </Layer>
     </Layers>
     <Scripts>
@@ -46,29 +46,4 @@
       </OnUpdate>
     </Scripts>
   </Frame>
-
-	<Frame name="KU_TextFrame" virtual="true" enableMouse="false" setAllPoints="true">
-		<Layers>
-			<Layer level="OVERLAY">
-				<FontString name="$parentName" inherits="GameFontNormalSmall" justifyH="CENTER">
-					<Size>
-						<AbsDimension x="12" y="12"/>
-					</Size>
-					<Anchors>
-						<Anchor point="CENTER">
-							<Offset>
-								<AbsDimension x="0" y="0"/>
-							</Offset>
-						</Anchor>
-					</Anchors>
-				</FontString>
-			</Layer>
-		</Layers>
-		<Scripts>
-			<OnLoad>
-				self:SetFrameLevel(self:GetParent():GetFrameLevel()+30);
-			</OnLoad>
-		</Scripts>
-	</Frame>
-
 </Ui>

@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-    Version 11.3
+    Version 12.0
 
     ChangeLog :
       - 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -127,10 +127,13 @@ Kiki Utils by Kiki
 	  - 11.2:
 	   - April, 7th 2021:
 	    - Added an option to hide blizzard spell activation overlay
-		- Added hunter tranqshot to dispel keybinding
-		- Fixed hunter autoshot
-		- Fixed monk mistweaving dispel keybinding
-		- Added option to auto change souldbinds (/ku sb)
+      - Added hunter tranqshot to dispel keybinding
+      - Fixed hunter autoshot
+      - Fixed monk mistweaving dispel keybinding
+      - Added option to auto change souldbinds (/ku sb)
+    - 12.0:
+     - Nov, 1st 2022:
+      - Removed unused old code
 
     Features :
       - Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -344,8 +347,8 @@ end
 
 --------------- Hooked functions ---------------
 
-local function KU_GetScreenHeight(col)
-  if(col == 0)
+local function KU_GetScreenHeight(firstCol)
+  if(firstCol)
   then
     return GetScreenHeight() - MinimapCluster:GetHeight() - 20;
   else
@@ -359,7 +362,7 @@ function KU_updateContainerFrameAnchors()
   local VISIBLE_CONTAINER_SPACING = 3
   local CONTAINER_OFFSET_Y = KU_GetToonConfigInt("AdjustBags",70);
 	local containerScale = KU_GetToonConfigInt("ScaleBags",1.0);
-	local frame, xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
+	local xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
 	local screenWidth = GetScreenWidth();
 	local leftLimit = 0;
 	if ( BankFrame:IsShown() ) then
@@ -367,7 +370,7 @@ function KU_updateContainerFrameAnchors()
 	end
 	
 	while ( containerScale > CONTAINER_SCALE ) do
-		screenHeight = KU_GetScreenHeight(0) / containerScale;
+		screenHeight = KU_GetScreenHeight(true) / containerScale;
 		-- Adjust the start anchor for bags depending on the multibars
 		xOffset = CONTAINER_OFFSET_X / containerScale; 
 		yOffset = CONTAINER_OFFSET_Y / containerScale; 
@@ -376,17 +379,29 @@ function KU_updateContainerFrameAnchors()
 		leftMostPoint = screenWidth - xOffset;
 		column = 1;
 		local frameHeight;
-		for index, frameName in ipairs(ContainerFrame1.bags) do
-			frameHeight = _G[frameName]:GetHeight();
+		local framesInColumn = 0;
+		local forceScaleDecrease = false;
+		for index, frame in ipairs(ContainerFrameSettingsManager:GetBagsShown()) do
+			framesInColumn = framesInColumn + 1;
+			frameHeight = frame:GetHeight(true);
 			if ( freeScreenHeight < frameHeight ) then
-				-- Start a new column
-				column = column + 1;
-				leftMostPoint = screenWidth - ( column * CONTAINER_WIDTH * containerScale ) - xOffset;
-				freeScreenHeight = screenHeight - yOffset;
+				if framesInColumn == 1 then
+					-- If this is the only frame in the column and it doesn't fit, then scale must be reduced and the iteration restarted
+					forceScaleDecrease = true;
+					break;
+				else
+					-- Start a new column
+					column = column + 1;
+					framesInColumn = 0; -- kind of a lie, at this point there's actually a single frame in the new column, but this simplifies where to increment.
+					leftMostPoint = screenWidth - ( column * frame:GetWidth(true) * containerScale ) - xOffset;
+					freeScreenHeight = screenHeight - yOffset;
+				end
 			end
-			freeScreenHeight = freeScreenHeight - frameHeight - VISIBLE_CONTAINER_SPACING;
+
+			freeScreenHeight = freeScreenHeight - frameHeight;
 		end
-		if ( leftMostPoint < leftLimit ) then
+
+		if forceScaleDecrease or (leftMostPoint < leftLimit) then
 			containerScale = containerScale - 0.01;
 		else
 			break;
@@ -397,31 +412,35 @@ function KU_updateContainerFrameAnchors()
 		containerScale = CONTAINER_SCALE;
 	end
 	
-	screenHeight = KU_GetScreenHeight(0) / containerScale;
+	local screenHeight = KU_GetScreenHeight(true) / containerScale;
 	-- Adjust the start anchor for bags depending on the multibars
-	xOffset = CONTAINER_OFFSET_X / containerScale;
-	yOffset = CONTAINER_OFFSET_Y / containerScale;
+	local xOffset = CONTAINER_OFFSET_X / containerScale;
+	local yOffset = CONTAINER_OFFSET_Y / containerScale;
 	-- freeScreenHeight determines when to start a new column of bags
-	freeScreenHeight = screenHeight - yOffset;
-	column = 0;
-	for index, frameName in ipairs(ContainerFrame1.bags) do
-		frame = _G[frameName];
+	local freeScreenHeight = screenHeight - yOffset;
+	local previousBag;
+	local firstBagInMostRecentColumn;
+	for index, frame in ipairs(ContainerFrameSettingsManager:GetBagsShown()) do
 		frame:SetScale(containerScale);
-		if ( index == 1 ) then
+		if index == 1 then
 			-- First bag
-			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT", -xOffset, yOffset );
-		elseif ( freeScreenHeight < frame:GetHeight() ) then
+			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT", -xOffset, yOffset);
+			firstBagInMostRecentColumn = frame;
+		elseif (freeScreenHeight < frame:GetHeight()) or previousBag:IsCombinedBagContainer() then
 			-- Start a new column
-			column = column + 1;
-			screenHeight = KU_GetScreenHeight(column) / containerScale;
+      screenHeight = KU_GetScreenHeight(false) / containerScale
 			freeScreenHeight = screenHeight - yOffset;
-			frame:SetPoint("BOTTOMRIGHT", frame:GetParent(), "BOTTOMRIGHT", -(column * CONTAINER_WIDTH) - xOffset, yOffset );
+			frame:SetPoint("BOTTOMRIGHT", firstBagInMostRecentColumn, "BOTTOMLEFT", -11, 0);
+			firstBagInMostRecentColumn = frame;
 		else
 			-- Anchor to the previous bag
-			frame:SetPoint("BOTTOMRIGHT", ContainerFrame1.bags[index - 1], "TOPRIGHT", 0, CONTAINER_SPACING);	
+			frame:SetPoint("BOTTOMRIGHT", previousBag, "TOPRIGHT", 0, CONTAINER_SPACING);
 		end
-		freeScreenHeight = freeScreenHeight - frame:GetHeight() - VISIBLE_CONTAINER_SPACING;
+
+		previousBag = frame;
+		freeScreenHeight = freeScreenHeight - frame:GetHeight();
 	end
+
 end
 
 --------------- Init functions ---------------
@@ -489,7 +508,6 @@ end
 
 local function KU_InitDefaults()
   KU_CheckAndInitDefault("DebugMode",false);
-  KU_CheckAndInitDefault("HideGryphon",false);
   KU_CheckAndInitDefault("HideClassBar",false);
   KU_CheckAndInitDefault("EnableClock",true);
   KU_CheckAndInitDefault("LockClock",false);
@@ -780,25 +798,6 @@ local function KU_SetNewDebugMode(printmsg)
   end
 end
 
-local function KU_SetNewGryphon(printmsg)
-  if(KU_GetToonConfig("HideGryphon"))
-  then
-    if(printmsg)
-    then
-      KU_ChatPrint(KU_GRYPHON_HIDDEN);
-    end
-    MainMenuBarArtFrame.LeftEndCap:Hide();
-    MainMenuBarArtFrame.RightEndCap:Hide();
-  else
-    if(printmsg)
-    then
-      KU_ChatPrint(KU_GRYPHON_SHOWN);
-    end
-	MainMenuBarArtFrame.LeftEndCap:Show();
-	MainMenuBarArtFrame.RightEndCap:Show();
-  end
-end
-
 local function KU_SetNewSpellActivationOverlay(printmsg)
   if(KU_GetToonConfig("HideSpellActivationOverlay"))
   then
@@ -1068,8 +1067,6 @@ local function KU_Commands(command)
   then
     local cbHidden = "off";
     if(KU_GetToonConfig("HideClassBar")) then cbHidden = "on"; end
-    local grHidden = "off";
-    if(KU_GetToonConfig("HideGryphon")) then grHidden = "on"; end
     local saoHidden = "off";
     if(KU_GetToonConfig("HideSpellActivationOverlay")) then saoHidden = "on"; end
     local clock = "off";
@@ -1102,7 +1099,6 @@ local function KU_Commands(command)
     local automusic = "off";
     if(KU_GetToonConfig("AutoDisableMusic")) then automusic = "on"; end
     KU_ChatPrint("Usage:");
-    KU_ChatPrint("  |cffffffff/ku hidegryphon (on|off|toggle)|r |cff2040ff["..grHidden.."]|r - "..KU_CHAT_HELP_GRYPHON);
     KU_ChatPrint("  |cffffffff/ku hidesao (on|off|toggle)|r |cff2040ff["..saoHidden.."]|r - "..KU_CHAT_HELP_SAO);
     --KU_ChatPrint("  |cffffffff/ku hidecb (on|off|toggle)|r |cff2040ff["..cbHidden.."]|r - "..KU_CHAT_HELP_CLASSBAR);
     KU_ChatPrint("  |cffffffff/ku clock (on|off|toggle)|r |cff2040ff["..clock.."]|r - "..KU_CHAT_HELP_CLOCK);
@@ -1214,9 +1210,6 @@ local function KU_Commands(command)
   elseif(cmd == "automusic")
   then
     KU_Commands_ParamParse(param,"automusic","AutoDisableMusic",nil);
-  elseif(cmd == "hidegryphon")
-  then
-    KU_Commands_ParamParse(param,"hidegryphon","HideGryphon",KU_SetNewGryphon);
   elseif(cmd == "hidesao")
   then
     KU_Commands_ParamParse(param,"hidesao","HideSpellActivationOverlay",KU_SetNewSpellActivationOverlay);
@@ -2117,7 +2110,6 @@ local function KikiUtils_StartInitVars()
     end
     KU_ImportGlobalConfig(); -- Check for Global->Local settings convertion
     KU_CheckConvertBindings();
-    KU_SetNewGryphon(false);
     KU_SetNewSpellActivationOverlay(false);
     KU_SetNewClassBar(false);
     KU_SetNewTrack(false);
@@ -2132,8 +2124,6 @@ local function KikiUtils_StartInitVars()
     KU_SetNewSwapIdol(false);
     KU_SetNewDebugMode(false);
     KU_CheckTalentTree(false);
-    --
-    CreateFrame("Frame","KU_PlayerPowerBarAltOverlay",PlayerPowerBarAlt,"KU_TextFrame");    
     --
     KU_NeedInitToonSpecific = false;
     -- Check for Mounts convert
@@ -2620,13 +2610,13 @@ function KikiUtils_MMPing_OnEvent(self,event,...)
   if(event == "MINIMAP_PING")
   then
     local unit = ...;
-    if(unit ~= "player")
-    then
-      KU_MMPingText:SetText(UnitName(unit));
+    --if(unit ~= "player")
+    --then
+      KU_MMPingText:SetText("Ping: "..UnitName(unit));
       KU_MMPingText:SetTextColor(0.8,0.8,0.0);
       KU_MMPingText:Show();
       KU_MMPing_StartTime = GetTime();
-    end
+    --end
   end
 end
 
@@ -3077,6 +3067,9 @@ function KU_BindingsSetKeys()
       if(button == nil)
       then
         button = CreateFrame("Button","KU_SB"..i,UIParent,"SecureActionButtonTemplate");
+        button:SetWidth(1);
+        button:SetHeight(1);
+        button:RegisterForClicks("AnyUp", "AnyDown");
       end
       button:SetAttribute("type",infos.type);
       if(infos.unit ~= "none") then
@@ -3368,8 +3361,8 @@ function KikiUtils_RefreshStance()
         b = CreateFrame("Button", "KU_SSEB" .. i,UIParent,"SecureActionButtonTemplate");
         b:SetWidth(1);
         b:SetHeight(1);
+        b:RegisterForClicks("AnyUp", "AnyDown");
         b:SetAttribute("type","macro");
-        --b:RegisterForClicks("LeftButtonUp");
         STANCE_BUTTONS[i] = b;
       end
       local key = nil;
@@ -3409,6 +3402,7 @@ function KikiUtils_RefreshStance()
       b = CreateFrame("Button", "KU_SSEB1", UIParent,"SecureActionButtonTemplate");
       b:SetWidth(1);
       b:SetHeight(1);
+      b:RegisterForClicks("AnyUp", "AnyDown");
       STANCE_BUTTONS[1] = b;
     end
     ClearOverrideBindings(b);
@@ -3429,12 +3423,12 @@ function KikiUtils_RefreshStance()
     CreateFrame("Button", "KU_ETB", UIParent,"SecureActionButtonTemplate");
     KU_ETB:SetWidth(1);
     KU_ETB:SetHeight(1);
-    --KU_ETB:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+    KU_ETB:RegisterForClicks("AnyUp", "AnyDown");
     KU_ETB:SetAttribute("type","macro");
     CreateFrame("Button", "KU_ETBN", UIParent,"SecureActionButtonTemplate");
     KU_ETBN:SetWidth(1);
     KU_ETBN:SetHeight(1);
-    --KU_ETBN:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+    KU_ETBN:RegisterForClicks("AnyUp", "AnyDown");
     KU_ETBN:SetAttribute("type","macro");
   end    
   -- Set key overriding for easy travel
@@ -3481,6 +3475,7 @@ local function KikiUtils_ForceAttack_Init()
     CreateFrame("Button", "KU_FAB", UIParent,"SecureActionButtonTemplate");
     KU_FAB:SetWidth(1);
     KU_FAB:SetHeight(1);
+    KU_FAB:RegisterForClicks("AnyUp", "AnyDown");
   end    
   -- Set key overriding for force-attack-or-shot
   ClearOverrideBindings(KU_FAB);
@@ -3502,6 +3497,7 @@ local function KikiUtils_SetupCureButton(button,name,key_name,spellID)
     button = CreateFrame("Button", name, UIParent,"SecureActionButtonTemplate");
     button:SetWidth(1);
     button:SetHeight(1);
+    button:RegisterForClicks("AnyUp", "AnyDown");
   end
   ClearOverrideBindings(button);
   -- Set key overriding
@@ -3583,6 +3579,7 @@ local function KikiUtils_SetupRaidTarget()
     KU_RTB = CreateFrame("Button", "KU_RTB", UIParent,"SecureActionButtonTemplate");
     KU_RTB:SetWidth(1);
     KU_RTB:SetHeight(1);
+    KU_RTB:RegisterForClicks("AnyUp", "AnyDown");
   end
   ClearOverrideBindings(KU_RTB);
   -- Set key overriding
@@ -3667,7 +3664,7 @@ end
 
 function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, value, valueMin, valueMax)
 	local fname = statusFrame:GetName();
-	if( (strfind(fname,"FrameHealthBar") or strfind(fname,"FrameManaBar")) and KU_GetToonConfig("ShowPercent") )
+	if(fname and (strfind(fname,"FrameHealthBar") or strfind(fname,"FrameManaBar")) and KU_GetToonConfig("ShowPercent") )
 	then
 		if ( ( tonumber(valueMax) ~= valueMax or valueMax > 0 ) and not ( statusFrame.pauseUpdates ) ) then
 			local valueDisplay = value;
