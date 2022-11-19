@@ -1,4 +1,4 @@
-## Interface: 100000
+## Interface: 100002
 ## Title: Kiki Utils
 ## Author: Kiki From European Conseil des Ombres
 ## Version: 12.0
