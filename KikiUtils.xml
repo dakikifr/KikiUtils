@@ -18,7 +18,7 @@
   
   <GameTooltip name="KU_Tooltip" inherits="GameTooltipTemplate" parent="UIParent" hidden="true"/>
 
-  <Frame name="KU_MMPingFrame" parent="UIParent">
+  <!--<Frame name="KU_MMPingFrame" parent="UIParent">
     <Size>
       <AbsDimension x="80" y="15"/>
     </Size>
@@ -45,5 +45,5 @@
         KikiUtils_MMPing_OnUpdate(self,elapsed);
       </OnUpdate>
     </Scripts>
-  </Frame>
+  </Frame>-->
 </Ui>
