@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-		Version 14.0
+		Version 14.1
 
 		ChangeLog :
 			- 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -492,7 +492,7 @@ end
 local function KU_CheckTalentTree(fromTalentChange)
 	local tree = GetSpecialization();
 	local firstTime = false
-	if (KU_ActiveTree == nil) -- First time
+	if (KU_ActiveTree == nil)  -- First time
 	then
 		if (not tree or tree == 0) -- To prevent Bliz bug (PLAYER_TALENT_UPDATE is triggered when you zone)
 		then
@@ -620,7 +620,8 @@ local function KU_ApplySouldBindBranches(soulbindID, selectedNodes, checkOnly)
 			KU_ChatPrint("Changing Soulbind Path for " .. sbName .. ": " .. tostring(#KU_SoulBindPathsToApply) .. " to change")
 		else
 			KU_SoulBindPathsToApply = {}
-			KU_Announce("WARNING: Cannot change Soulbind Path, " .. tostring(#KU_SoulBindPathsToApply) .. " should be changed!",
+			KU_Announce(
+				"WARNING: Cannot change Soulbind Path, " .. tostring(#KU_SoulBindPathsToApply) .. " should be changed!",
 				1.0, 0.1, 0.1)
 		end
 	end
@@ -760,7 +761,7 @@ local function KU_SearchMountInBags(partial_mount_name)
 					n = item_name;
 				else
 					KU_ChatPrint("Found multiple items with name '" ..
-					partial_mount_name .. "' in your bags, please give a more precise name");
+						partial_mount_name .. "' in your bags, please give a more precise name");
 					return -1, -1, nil;
 				end
 			end
@@ -792,7 +793,7 @@ local function KU_SearchIdolInBags(partial_idol_name)
 					n = item_name;
 				else
 					KU_ChatPrint("Found multiple items with name '" ..
-					partial_idol_name .. "' in your bags, please give a more precise name");
+						partial_idol_name .. "' in your bags, please give a more precise name");
 					return -1, -1, nil;
 				end
 			end
@@ -1104,8 +1105,10 @@ local function KU_Commands(command)
 		local level = "off";
 		if (KU_GetToonConfig("QuestLevel")) then level = "on"; end
 		local bags = "off";
-		if (KU_GetToonConfigInt("AdjustBags", nil) ~= nil) then bags = "on: " ..
-			tostring(KU_GetToonConfigInt("AdjustBags", nil)); end
+		if (KU_GetToonConfigInt("AdjustBags", nil) ~= nil) then
+			bags = "on: " ..
+					tostring(KU_GetToonConfigInt("AdjustBags", nil));
+		end
 		local b_name = KU_GetToonConfigString("BipStr");
 		local swapidol = "off";
 		if (KU_GetToonConfig("SwapIdol")) then swapidol = "on"; end
@@ -1130,7 +1133,7 @@ local function KU_Commands(command)
 		--KU_ChatPrint("  |cffffffff/ku hidecb (on|off|toggle)|r |cff2040ff["..cbHidden.."]|r - "..KU_CHAT_HELP_CLASSBAR);
 		KU_ChatPrint("  |cffffffff/ku clock (on|off|toggle)|r |cff2040ff[" .. clock .. "]|r - " .. KU_CHAT_HELP_CLOCK);
 		KU_ChatPrint("  |cffffffff/ku lock (on|off|toggle)|r |cff2040ff[" .. clock_lock .. "]|r - " ..
-		KU_CHAT_HELP_CLOCK_LOCK);
+			KU_CHAT_HELP_CLOCK_LOCK);
 		--KU_ChatPrint("  |cffffffff/ku track (on|off|toggle)|r |cff2040ff["..track.."]|r - "..KU_CHAT_HELP_TRACK);
 		KU_ChatPrint("  |cffffffff/ku level (on|off|toggle)|r |cff2040ff[" .. level .. "]|r - " .. KU_CHAT_HELP_LEVEL);
 		KU_ChatPrint("  |cffffffff/ku bags (on|off|toggle)|r |cff2040ff[" .. bags .. "]|r - " .. KU_CHAT_HELP_BAGS);
@@ -1138,37 +1141,38 @@ local function KU_Commands(command)
 		KU_ChatPrint("  |cffffffff/ku mounts|r - " .. KU_CHAT_HELP_MOUNTS);
 		KU_ChatPrint("  |cffffffff/ku addmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " .. KU_CHAT_HELP_MOUNT_ADD);
 		KU_ChatPrint("  |cffffffff/ku addflightmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " ..
-		KU_CHAT_HELP_MOUNT_ADD_FLIGHT);
+			KU_CHAT_HELP_MOUNT_ADD_FLIGHT);
 		KU_ChatPrint("  |cffffffff/ku addbgmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " .. KU_CHAT_HELP_MOUNT_ADD_BG);
 		KU_ChatPrint("  |cffffffff/ku addinstmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " .. KU_CHAT_HELP_MOUNT_ADD_INST);
 		KU_ChatPrint("  |cffffffff/ku delmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " .. KU_CHAT_HELP_MOUNT_DEL);
 		KU_ChatPrint("  |cffffffff/ku delbgmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " .. KU_CHAT_HELP_MOUNT_DEL_BG);
 		KU_ChatPrint("  |cffffffff/ku delinstmount <" .. KU_CHAT_HELP_MOUNT_NAME .. ">|r - " .. KU_CHAT_HELP_MOUNT_DEL_INST);
 		KU_ChatPrint("  |cffffffff/ku bip <" .. KU_CHAT_HELP_BIP_NAME ..
-		">|r |cff2040ff[" .. b_name .. "]|r - " .. KU_CHAT_HELP_BIP);
+			">|r |cff2040ff[" .. b_name .. "]|r - " .. KU_CHAT_HELP_BIP);
 		KU_ChatPrint("  |cffffffff/ku youdodge (on|off|toggle)|r |cff2040ff[" .. youdodge .. "]|r - " ..
-		KU_CHAT_HELP_YOU_DODGE);
+			KU_CHAT_HELP_YOU_DODGE);
 		KU_ChatPrint("  |cffffffff/ku targetdodge (on|off|toggle)|r |cff2040ff[" ..
-		targetdodge .. "]|r - " .. KU_CHAT_HELP_TARGET_DODGE);
+			targetdodge .. "]|r - " .. KU_CHAT_HELP_TARGET_DODGE);
 		KU_ChatPrint("  |cffffffff/ku youparry (on|off|toggle)|r |cff2040ff[" .. youparry .. "]|r - " ..
-		KU_CHAT_HELP_YOU_PARRY);
+			KU_CHAT_HELP_YOU_PARRY);
 		KU_ChatPrint("  |cffffffff/ku obj [obj link]|r - " .. "Displays object name and ID");
 		KU_ChatPrint("  |cffffffff/ku swapidol (on|off|toggle)|r |cff2040ff[" .. swapidol .. "]|r - " ..
-		KU_CHAT_HELP_SWAP_IDOL);
+			KU_CHAT_HELP_SWAP_IDOL);
 		KU_ChatPrint("  |cffffffff/ku idol <" ..
-		KU_CHAT_HELP_IDOL_NAME .. ">|r |cff2040ff[" .. i_name .. "]|r - " .. KU_CHAT_HELP_IDOL);
+			KU_CHAT_HELP_IDOL_NAME .. ">|r |cff2040ff[" .. i_name .. "]|r - " .. KU_CHAT_HELP_IDOL);
 		KU_ChatPrint("  |cffffffff/ku shot <" ..
-		KU_CHAT_HELP_SHOT_NAME .. ">|r |cff2040ff[" .. s_name .. "]|r - " .. KU_CHAT_HELP_SHOT);
+			KU_CHAT_HELP_SHOT_NAME .. ">|r |cff2040ff[" .. s_name .. "]|r - " .. KU_CHAT_HELP_SHOT);
 		KU_ChatPrint("  |cffffffff/ku debug (on|off|toggle)|r |cff2040ff[" ..
-		debugmode .. "]|r - " .. "Enables/Disables debug mode");
+			debugmode .. "]|r - " .. "Enables/Disables debug mode");
 		KU_ChatPrint("  |cffffffff/ku binds|r - " .. KU_CHAT_HELP_SB_LIST);
 		KU_ChatPrint("  |cffffffff/ku addbind <key> <type> <unit> <spell>|r - " .. KU_CHAT_HELP_SB_ADD);
 		KU_ChatPrint("  |cffffffff/ku delbind <index>|r - " .. KU_CHAT_HELP_SB_DEL);
 		KU_ChatPrint("  |cffffffff/ku bfmm|r - " .. KU_CHAT_HELP_BFMM);
 		KU_ChatPrint("  |cffffffff/ku percent (on|off|toggle)|r |cff2040ff[" ..
-		showpercent .. "]|r - " .. "Shows target frame health values AND percent");
+			showpercent .. "]|r - " .. "Shows target frame health values AND percent");
 		KU_ChatPrint("  |cffffffff/ku automusic (on|off|toggle)|r |cff2040ff[" ..
-		automusic .. "]|r - " .. "Automatically disables music when fighting a boss");
+			automusic .. "]|r - " .. "Automatically disables music when fighting a boss");
+		KU_ChatPrint("  |cffffffff/ku options|r - " .. "Open graphical options panel");
 	elseif (cmd == "percent")
 	then
 		KU_Commands_ParamParse(param, "percent", "ShowPercent", KU_SetShowPercent);
@@ -1316,7 +1320,7 @@ local function KU_Commands(command)
 			if (param == "")
 			then
 				KU_ChatPrint("Current bags parameters: Offset=" ..
-				KU_GetToonConfigInt("AdjustBags", 70) .. " Scale=" .. KU_GetToonConfigInt("ScaleBags", 1.0));
+					KU_GetToonConfigInt("AdjustBags", 70) .. " Scale=" .. KU_GetToonConfigInt("ScaleBags", 1.0));
 				return;
 			end
 			local _, _, offsetStr, scaleStr = strfind(param, "([^ ]+) *([^ ]*)")
@@ -1390,7 +1394,7 @@ local function KU_Commands(command)
 		for i, mountID in ipairs(mountIDs)
 		do
 			local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned =
-			C_MountJournal.GetMountInfoByID(mountID);
+					C_MountJournal.GetMountInfoByID(mountID);
 			if ((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName), passedName)))
 			then
 				if (not summonable)
@@ -1441,7 +1445,7 @@ local function KU_Commands(command)
 		for i, mountID in ipairs(mountIDs)
 		do
 			local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned =
-			C_MountJournal.GetMountInfoByID(mountID);
+					C_MountJournal.GetMountInfoByID(mountID);
 			if ((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName), passedName)))
 			then
 				if (not summonable)
@@ -1492,7 +1496,7 @@ local function KU_Commands(command)
 		for i, mountID in ipairs(mountIDs)
 		do
 			local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned =
-			C_MountJournal.GetMountInfoByID(mountID);
+					C_MountJournal.GetMountInfoByID(mountID);
 			if ((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName), passedName)))
 			then
 				if (not summonable)
@@ -1543,7 +1547,7 @@ local function KU_Commands(command)
 		for i, mountID in ipairs(mountIDs)
 		do
 			local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned =
-			C_MountJournal.GetMountInfoByID(mountID);
+					C_MountJournal.GetMountInfoByID(mountID);
 			if ((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName), passedName)))
 			then
 				if (not summonable)
@@ -1594,7 +1598,7 @@ local function KU_Commands(command)
 		for i, mountID in ipairs(mountIDs)
 		do
 			local creatureName, spellID, icon, active, summonable, source, isFavorite, isFactionSpecific, faction, unknown, owned =
-			C_MountJournal.GetMountInfoByID(mountID);
+					C_MountJournal.GetMountInfoByID(mountID);
 			if ((linkSpellID ~= nil and linkSpellID == spellID) or (passedName ~= nil and strfind(strupper(creatureName), passedName)))
 			then
 				if (not summonable)
@@ -1941,6 +1945,9 @@ local function KU_Commands(command)
 	elseif (cmd == "youparry")
 	then
 		KU_Commands_ParamParse(param, "youparry", "Parry", KU_SetNewYouParry);
+	elseif (cmd == "options")
+	then
+		KU_OpenOptionsPanel();
 	else
 		KU_ChatPrint(KU_CHAT_CMD_UNKNOWN);
 	end
@@ -2552,7 +2559,7 @@ function KikiUtils_OnEvent(self, event, ...)
 		local new = IsMounted();
 		if (new ~= old) -- Mounting state changed
 		then
-			if (new)   -- Mounting
+			if (new)    -- Mounting
 			then
 				KU_HasUseMount = true;
 			elseif (InCombatLockdown())
@@ -3315,11 +3322,11 @@ function KU_SetRelic(name)
 end
 
 function KU_IdolSwap(new_shape)
-	if (KU_IsDruid == false) then return; end            -- Not a druid, returns
+	if (KU_IsDruid == false) then return; end             -- Not a druid, returns
 	if (not KU_GetToonConfig("SwapIdol")) then return; end -- No auto swap, returns
-	if (new_shape == 0)                                  -- Human
+	if (new_shape == 0)                                   -- Human
 	then
-		if (KU_IS_COMBAT == 1)                             -- In combat, delay the swap
+		if (KU_IS_COMBAT == 1)                              -- In combat, delay the swap
 		then
 			KU_MustSwapDefaultIdol = true;
 			return;
@@ -3464,8 +3471,9 @@ function _KU_CreateMountMacros(landmount, flymount)
 	then
 		local numForms = GetNumShapeshiftForms()
 		macrotext = macrotext ..
-		"/cast [stance:" ..
-		tostring(numForms + 1) .. "]" .. GetSpellInfo(324701) .. "\n/stopmacro [stance:" .. tostring(numForms + 1) .. "]\n";                            -- Flicker
+				"/cast [stance:" ..
+				tostring(numForms + 1) ..
+				"]" .. GetSpellInfo(324701) .. "\n/stopmacro [stance:" .. tostring(numForms + 1) .. "]\n"; -- Flicker
 	end
 
 	if (landmount)
@@ -3473,15 +3481,15 @@ function _KU_CreateMountMacros(landmount, flymount)
 		if (flymount)
 		then
 			macrotext = macrotext ..
-			"/use [" ..
-			mount_add ..
-			"nomounted,noswimming" ..
-			nocombat_add ..
-			flyable_add .. "]" .. flymount .. ";[" .. mount_add .. "nomounted" .. nocombat_add ..
-			swim_add .. "]" .. landmount .. "\n";
+					"/use [" ..
+					mount_add ..
+					"nomounted,noswimming" ..
+					nocombat_add ..
+					flyable_add .. "]" .. flymount .. ";[" .. mount_add .. "nomounted" .. nocombat_add ..
+					swim_add .. "]" .. landmount .. "\n";
 		else
 			macrotext = macrotext .. "/use [" .. mount_add .. "nomounted,noswimming" .. nocombat_add .. "]" .. landmount ..
-			"\n";
+					"\n";
 		end
 	end
 	if (travel_name)
@@ -3523,7 +3531,7 @@ function _KU_CreateMountMacros(landmount, flymount)
 		if (landmount) -- Have a mount, cast ghost only in combat
 		then
 			macrotext = macrotext .. "/cast [nomounted,stance:0,combat]" ..
-			ghost .. "\n" .. "/cancelaura [stance:1]" .. ghost .. "\n";
+					ghost .. "\n" .. "/cancelaura [stance:1]" .. ghost .. "\n";
 		else
 			macrotext = macrotext .. "/cast [nomounted,stance:0]" .. ghost .. "\n" .. "/cancelaura [stance:1]" .. ghost .. "\n";
 		end
@@ -3912,7 +3920,7 @@ function KU_TextStatusBar_UpdateTextStringWithValues(statusFrame, textString, va
 				local percent = tostring(math.ceil((value / valueMax) * 100)) .. "%";
 				if (statusFrame.prefix and (statusFrame.alwaysPrefix or not (statusFrame.cvar and GetCVar(statusFrame.cvar) == "1" and statusFrame.textLockable))) then
 					textString:SetText(statusFrame.prefix .. " " .. valueDisplay .. "/" .. valueMaxDisplay .. " (" .. percent ..
-					")");
+						")");
 				else
 					textString:SetText(valueDisplay .. " / " .. valueMaxDisplay .. " (" .. percent .. ")");
 				end
@@ -3935,13 +3943,13 @@ function KU_PrintPoints(frame)
 	do
 		local point, relativeTo, relativePoint, xOfs, yOfs = frame:GetPoint(i);
 		KU_ChatPrint(" " ..
-		i ..
-		"/" ..
-		num ..
-		": " ..
-		tostring(point) ..
-		" - " .. tostring(relativeTo) .. " - " .. tostring(relativePoint) .. " - " .. tostring(xOfs) .. " - " ..
-		tostring(yOfs));
+			i ..
+			"/" ..
+			num ..
+			": " ..
+			tostring(point) ..
+			" - " .. tostring(relativeTo) .. " - " .. tostring(relativePoint) .. " - " .. tostring(xOfs) .. " - " ..
+			tostring(yOfs));
 	end
 end
 
@@ -3950,7 +3958,7 @@ function KU_HasMount(spellID)
 	for _, id in ipairs(mounts)
 	do
 		local name, sID, icon, isActive, isUsable, sourceType, isFavorite, isFactionSpecific, faction, shouldHideOnChar, isCollected, mountID =
-		C_MountJournal.GetMountInfoByID(id)
+				C_MountJournal.GetMountInfoByID(id)
 		-- TODO: Check faction
 		if sID == spellID
 		then
@@ -3988,6 +3996,32 @@ end
 function KU_HasBIPF() -- Broken Isles Pathfinder
 	return KU_HasSpell(233368);
 end
+
+-------------------------------------------------------------------
+-- API table for Options Panel
+-------------------------------------------------------------------
+KU_API = {
+	SetToonConfig = KU_SetToonConfig,
+	GetToonConfig = KU_GetToonConfig,
+	GetToonConfigString = KU_GetToonConfigString,
+	GetToonConfigInt = KU_GetToonConfigInt,
+	ChatPrint = KU_ChatPrint,
+	ApplyConfigChange = function(name)
+		if name == "EnableClock" then
+			KU_SetClock(false)
+		elseif name == "LockClock" then
+			KU_SetClockLock(false)
+		elseif name == "HideSpellActivationOverlay" then
+			KU_SetNewSpellActivationOverlay(false)
+		elseif name == "ShowPercent" then
+			KU_SetShowPercent(false)
+		elseif name == "DebugMode" then
+			KU_SetNewDebugMode(false)
+		elseif name == "LossOfControl" then
+			KU_SetNewLossOfControl(false)
+		end
+	end,
+}
 
 function KU_BuyItem(itemID, quantity)
 	local itemName = GetItemInfo(itemID);
