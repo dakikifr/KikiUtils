@@ -17,6 +17,8 @@ local MAX_SEARCH_RESULTS = 80
 local MOUNT_ICON_SIZE = 32
 local SECTION_SPACING = 12
 local CHECKBOX_SPACING = 28
+local BIND_ROW_HEIGHT = 40
+local BIND_ICON_SIZE = 32
 
 -------------------------------------------------------------------
 -- Mount categories definition
@@ -65,6 +67,18 @@ local searchScrollChild = nil
 local searchEditBox = nil
 local searchResultFrames = {}
 local generalScrollChild = nil
+local bindListFrames = {}
+local bindScrollChild = nil
+local bindAddForm = nil
+local bindDeleteConfirm = nil
+
+-------------------------------------------------------------------
+-- Binding types and units supported by KikiUtils
+-------------------------------------------------------------------
+local BIND_TYPES = { "spell", "action", "item", "macro", "click" }
+local BIND_UNITS = { "none", "target", "player", "mouseover", "focus",
+	"party1", "party2", "party3", "party4",
+	"targettarget" }
 
 -------------------------------------------------------------------
 -- Config helpers (directly accessing the global SavedVariable)
@@ -332,7 +346,7 @@ local function CreateSidebar(parent)
 	sidebar:SetBackdropColor(0.1, 0.1, 0.15, 0.7)
 	sidebar:SetBackdropBorderColor(0.4, 0.35, 0.15, 0.8)
 
-	local categories = { "General", "Mounts" }
+	local categories = { "General", "Mounts", "Binds" }
 	for i, catName in ipairs(categories) do
 		local btn = CreateFrame("Button", nil, sidebar)
 		btn:SetSize(SIDEBAR_WIDTH - 16, 32)
@@ -909,6 +923,643 @@ local function CreateMountsPanel(parent)
 end
 
 -------------------------------------------------------------------
+-- BINDS PANEL
+-------------------------------------------------------------------
+
+-- Try to get a spell icon from spell name
+local function GetSpellIconByName(spellName)
+	if not spellName or spellName == "" then return nil end
+	-- Try as a spellID number first
+	local asNum = tonumber(spellName)
+	if asNum then
+		local info = C_Spell.GetSpellInfo(asNum)
+		if info then return info.iconID end
+	end
+	-- Try as spell name
+	local info = C_Spell.GetSpellInfo(spellName)
+	if info then return info.iconID end
+	return nil
+end
+
+local function GetBindingIcon(bind)
+	if bind.type == "spell" then
+		return GetSpellIconByName(bind.name) or 134400
+	elseif bind.type == "item" then
+		local _, _, _, _, icon = C_Item.GetItemInfoInstant(bind.name)
+		return icon or 134400
+	elseif bind.type == "macro" then
+		return 134400 -- generic macro icon
+	elseif bind.type == "action" then
+		return 134400
+	elseif bind.type == "click" then
+		return 134400
+	end
+	return 134400
+end
+
+-- Forward declaration
+local RefreshBindList
+
+-------------------------------------------------------------------
+-- Delete confirmation popup
+-------------------------------------------------------------------
+local function ShowDeleteBindConfirm(index, bindInfo, onConfirm)
+	if bindDeleteConfirm then
+		bindDeleteConfirm:Hide()
+		bindDeleteConfirm:SetParent(nil)
+		bindDeleteConfirm = nil
+	end
+
+	local popup = CreateFrame("Frame", nil, mainFrame, "BackdropTemplate")
+	popup:SetSize(360, 110)
+	popup:SetPoint("CENTER", mainFrame, "CENTER", 0, 40)
+	popup:SetBackdrop({
+		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+		edgeSize = 14,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 },
+	})
+	popup:SetBackdropColor(0.1, 0.05, 0.05, 0.95)
+	popup:SetBackdropBorderColor(0.8, 0.3, 0.3, 1)
+	popup:SetFrameStrata("TOOLTIP")
+	popup:SetFrameLevel(200)
+	popup:EnableMouse(true)
+
+	local msg = popup:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	msg:SetPoint("TOP", 0, -14)
+	msg:SetWidth(330)
+	msg:SetText("Remove binding #" .. index .. "?\n" ..
+		"|cffffffff[" .. bindInfo.key .. "]|r " .. bindInfo.type .. " '" .. bindInfo.name .. "' -> " .. bindInfo.unit)
+
+	local yesBtn = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	yesBtn:SetSize(100, 24)
+	yesBtn:SetPoint("BOTTOMLEFT", 40, 12)
+	yesBtn:SetText("Delete")
+	yesBtn:SetScript("OnClick", function()
+		onConfirm()
+		popup:Hide()
+		popup:SetParent(nil)
+		bindDeleteConfirm = nil
+	end)
+
+	local noBtn = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	noBtn:SetSize(100, 24)
+	noBtn:SetPoint("BOTTOMRIGHT", -40, 12)
+	noBtn:SetText("Cancel")
+	noBtn:SetScript("OnClick", function()
+		popup:Hide()
+		popup:SetParent(nil)
+		bindDeleteConfirm = nil
+	end)
+
+	bindDeleteConfirm = popup
+	popup:Show()
+end
+
+-------------------------------------------------------------------
+-- Dropdown helper (simple custom dropdown)
+-------------------------------------------------------------------
+local function CreateSimpleDropdown(parent, x, y, width, items, defaultValue)
+	local container = CreateFrame("Frame", nil, parent)
+	container:SetSize(width, 24)
+	container:SetPoint("TOPLEFT", x, y)
+
+	local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
+	btn:SetAllPoints()
+	btn:SetBackdrop({
+		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+		edgeSize = 10,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 },
+	})
+	btn:SetBackdropColor(0.15, 0.15, 0.2, 0.9)
+	btn:SetBackdropBorderColor(0.5, 0.5, 0.5, 0.8)
+
+	local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	text:SetPoint("LEFT", 6, 0)
+	text:SetPoint("RIGHT", -18, 0)
+	text:SetJustifyH("LEFT")
+	text:SetText(defaultValue or items[1] or "")
+
+	local arrow = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	arrow:SetPoint("RIGHT", -4, 0)
+	arrow:SetText("v")
+
+	container.selectedValue = defaultValue or items[1] or ""
+	container.text = text
+
+	function container:SetValue(val)
+		self.selectedValue = val
+		self.text:SetText(val)
+	end
+
+	function container:GetValue()
+		return self.selectedValue
+	end
+
+	-- Menu frame
+	local menuFrame = nil
+
+	local function CloseMenu()
+		if menuFrame then
+			menuFrame:Hide()
+			menuFrame:SetParent(nil)
+			menuFrame = nil
+		end
+	end
+
+	btn:SetScript("OnClick", function(self)
+		if menuFrame then
+			CloseMenu()
+			return
+		end
+
+		local mf = CreateFrame("Frame", nil, self, "BackdropTemplate")
+		local itemHeight = 20
+		local menuHeight = #items * itemHeight + 8
+		mf:SetSize(width, menuHeight)
+		mf:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, -1)
+		mf:SetBackdrop({
+			bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+			edgeSize = 10,
+			insets = { left = 2, right = 2, top = 2, bottom = 2 },
+		})
+		mf:SetBackdropColor(0.1, 0.1, 0.15, 0.98)
+		mf:SetBackdropBorderColor(0.6, 0.5, 0.2, 1)
+		mf:SetFrameStrata("TOOLTIP")
+		mf:SetFrameLevel(210)
+		mf:EnableMouse(true)
+
+		for idx, item in ipairs(items) do
+			local itemBtn = CreateFrame("Button", nil, mf)
+			itemBtn:SetSize(width - 8, itemHeight)
+			itemBtn:SetPoint("TOPLEFT", 4, -4 - (idx - 1) * itemHeight)
+
+			local itemText = itemBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+			itemText:SetPoint("LEFT", 4, 0)
+			itemText:SetText(item)
+
+			local hl = itemBtn:CreateTexture(nil, "HIGHLIGHT")
+			hl:SetAllPoints()
+			hl:SetColorTexture(0.4, 0.35, 0.15, 0.4)
+
+			itemBtn:SetScript("OnClick", function()
+				container:SetValue(item)
+				CloseMenu()
+				if container.OnValueChanged then
+					container:OnValueChanged(item)
+				end
+			end)
+		end
+
+		menuFrame = mf
+
+		-- Close when clicking elsewhere
+		mf:SetScript("OnHide", function() CloseMenu() end)
+	end)
+
+	return container
+end
+
+-------------------------------------------------------------------
+-- Handle spell drop from cursor (drag & drop from Spellbook)
+-------------------------------------------------------------------
+local function HandleSpellDropForBind(spellEditBox)
+	local cursorType, id, subType, spellID = GetCursorInfo()
+	if cursorType == "spell" then
+		-- In modern WoW, the 4th return is the actual spellID
+		local resolvedID = spellID or id
+		local name = nil
+		-- Try C_Spell.GetSpellInfo with the resolved ID
+		local info = C_Spell.GetSpellInfo(resolvedID)
+		if info and info.name then
+			name = info.name
+		end
+		-- Fallback: try with id directly if spellID didn't work
+		if not name and id ~= resolvedID then
+			info = C_Spell.GetSpellInfo(id)
+			if info and info.name then
+				name = info.name
+			end
+		end
+		-- Fallback: try C_Spell.GetSpellName
+		if not name and C_Spell.GetSpellName then
+			local ok, n = pcall(C_Spell.GetSpellName, resolvedID)
+			if ok and n then name = n end
+		end
+		if name then
+			spellEditBox:SetText(name)
+			-- Auto-set type dropdown to spell
+			if spellEditBox.typeDropdown then
+				spellEditBox.typeDropdown:SetValue("spell")
+			end
+		end
+		ClearCursor()
+		return true
+	elseif cursorType == "item" then
+		local name = C_Item.GetItemInfo(id)
+		if name then
+			spellEditBox:SetText(name)
+			if spellEditBox.typeDropdown then
+				spellEditBox.typeDropdown:SetValue("item")
+			end
+		end
+		ClearCursor()
+		return true
+	elseif cursorType == "macro" then
+		local mName = GetMacroInfo(id)
+		if mName then
+			spellEditBox:SetText(mName)
+			if spellEditBox.typeDropdown then
+				spellEditBox.typeDropdown:SetValue("macro")
+			end
+		end
+		ClearCursor()
+		return true
+	end
+	return false
+end
+
+-------------------------------------------------------------------
+-- Refresh the binds list
+-------------------------------------------------------------------
+RefreshBindList = function()
+	-- Clear old rows
+	for _, row in ipairs(bindListFrames) do
+		row:Hide()
+		row:SetParent(nil)
+	end
+	wipe(bindListFrames)
+
+	if not bindScrollChild then return end
+
+	local binds = KU_GetBindings and KU_GetBindings() or nil
+	if not binds then
+		bindScrollChild:SetHeight(40)
+		return
+	end
+
+	local yPos = 0
+
+	for i, info in ipairs(binds) do
+		local row = CreateFrame("Frame", nil, bindScrollChild, "BackdropTemplate")
+		row:SetSize(bindScrollChild:GetWidth() - 4, BIND_ROW_HEIGHT)
+		row:SetPoint("TOPLEFT", 2, -yPos)
+		row:SetBackdrop({
+			bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+			edgeSize = 10,
+			insets = { left = 2, right = 2, top = 2, bottom = 2 },
+		})
+		row:SetBackdropColor(0.12, 0.12, 0.18, 0.6)
+		row:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.5)
+
+		-- Icon
+		local icon = row:CreateTexture(nil, "ARTWORK")
+		icon:SetSize(BIND_ICON_SIZE, BIND_ICON_SIZE)
+		icon:SetPoint("LEFT", 4, 0)
+		icon:SetTexture(GetBindingIcon(info))
+		icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+
+		-- Key column
+		local keyText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		keyText:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+		keyText:SetWidth(80)
+		keyText:SetJustifyH("LEFT")
+		keyText:SetText("|cff40ff40[" .. info.key .. "]|r")
+		keyText:SetWordWrap(false)
+
+		-- Type column
+		local typeText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		typeText:SetPoint("LEFT", keyText, "RIGHT", 4, 0)
+		typeText:SetWidth(50)
+		typeText:SetJustifyH("LEFT")
+		local typeColors = {
+			spell = "|cff71d5ff",
+			item = "|cffa335ee",
+			macro = "|cffff8000",
+			action = "|cffffff00",
+			click = "|cff00ff00",
+		}
+		local col = typeColors[info.type] or "|cffffffff"
+		typeText:SetText(col .. info.type .. "|r")
+
+		-- Name column
+		local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		nameText:SetPoint("LEFT", typeText, "RIGHT", 4, 0)
+		nameText:SetWidth(180)
+		nameText:SetJustifyH("LEFT")
+		nameText:SetText(info.name)
+		nameText:SetWordWrap(false)
+
+		-- Unit column
+		local unitText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		unitText:SetPoint("LEFT", nameText, "RIGHT", 4, 0)
+		unitText:SetWidth(75)
+		unitText:SetJustifyH("LEFT")
+		unitText:SetText("|cffaaaaaa" .. info.unit .. "|r")
+
+		-- Delete button
+		local delBtn = CreateFrame("Button", nil, row)
+		delBtn:SetSize(22, 22)
+		delBtn:SetPoint("RIGHT", -6, 0)
+		delBtn:SetNormalTexture("Interface/Buttons/UI-GroupLoot-Pass-Up")
+		delBtn:SetHighlightTexture("Interface/Buttons/UI-GroupLoot-Pass-Highlight")
+		delBtn.bindIndex = i
+		delBtn:SetScript("OnClick", function(self)
+			local idx = self.bindIndex
+			local bInfo = binds[idx]
+			if bInfo then
+				ShowDeleteBindConfirm(idx, bInfo, function()
+					KU_DelSpellBinding(idx)
+					RefreshBindList()
+				end)
+			end
+		end)
+		delBtn:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText("Remove this binding")
+			GameTooltip:Show()
+		end)
+		delBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+		-- Row hover effect + tooltip for spells
+		row:EnableMouse(true)
+		row:SetScript("OnEnter", function(self)
+			self:SetBackdropColor(0.2, 0.2, 0.3, 0.8)
+			if info.type == "spell" then
+				local spInfo = C_Spell.GetSpellInfo(info.name)
+				if spInfo then
+					GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+					GameTooltip:SetSpellByID(spInfo.spellID)
+					GameTooltip:Show()
+				end
+			end
+		end)
+		row:SetScript("OnLeave", function(self)
+			self:SetBackdropColor(0.12, 0.12, 0.18, 0.6)
+			GameTooltip:Hide()
+		end)
+
+		bindListFrames[i] = row
+		yPos = yPos + BIND_ROW_HEIGHT + 2
+	end
+
+	bindScrollChild:SetHeight(math.max(yPos + 20, 60))
+end
+
+-------------------------------------------------------------------
+-- Create the Binds panel
+-------------------------------------------------------------------
+local function CreateBindsPanel(parent)
+	local panel = CreateFrame("Frame", nil, parent)
+	panel:SetAllPoints()
+	panel:Hide()
+
+	-- Current spec info
+	local specLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	specLabel:SetPoint("TOPLEFT", 8, -6)
+	specLabel:SetTextColor(0.6, 0.6, 0.6)
+	panel:SetScript("OnShow", function()
+		local specIdx = GetSpecialization()
+		local specName = specIdx and select(2, GetSpecializationInfo(specIdx)) or "Unknown"
+		specLabel:SetText("Current Spec: " .. specName .. " (spec #" .. tostring(specIdx) .. ")")
+	end)
+
+	-- Bind list header
+	local headerLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	headerLabel:SetPoint("TOPLEFT", 8, -22)
+	headerLabel:SetText("Current Key Bindings:")
+	headerLabel:SetTextColor(0.9, 0.8, 0.5)
+
+	-- Column headers
+	local colY = -36
+	local colHeaders = {
+		{ text = "",     x = 8,   w = 38 },
+		{ text = "Key",  x = 46,  w = 80 },
+		{ text = "Type", x = 130, w = 50 },
+		{ text = "Name", x = 184, w = 180 },
+		{ text = "Unit", x = 368, w = 75 },
+	}
+	for _, ch in ipairs(colHeaders) do
+		local ct = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		ct:SetPoint("TOPLEFT", ch.x, colY)
+		ct:SetWidth(ch.w)
+		ct:SetJustifyH("LEFT")
+		ct:SetText(ch.text)
+		ct:SetTextColor(0.7, 0.65, 0.4)
+	end
+
+	-- Bind list scroll area
+	local listFrame = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+	listFrame:SetPoint("TOPLEFT", 4, -50)
+	listFrame:SetPoint("RIGHT", -4, 0)
+	listFrame:SetHeight(230)
+	listFrame:SetBackdrop({
+		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+		edgeSize = 10,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 },
+	})
+	listFrame:SetBackdropColor(0.08, 0.08, 0.12, 0.7)
+	listFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.6)
+
+	local bindScroll = CreateFrame("ScrollFrame", "KU_BindListScrollFrame", listFrame, "UIPanelScrollFrameTemplate")
+	bindScroll:SetPoint("TOPLEFT", 4, -4)
+	bindScroll:SetPoint("BOTTOMRIGHT", -24, 4)
+
+	bindScrollChild = CreateFrame("Frame")
+	bindScroll:SetScrollChild(bindScrollChild)
+	bindScrollChild:SetWidth(bindScroll:GetWidth() or 500)
+	bindScrollChild:SetHeight(1)
+
+	panel:HookScript("OnShow", function()
+		C_Timer.After(0.01, function()
+			bindScrollChild:SetWidth(bindScroll:GetWidth())
+			RefreshBindList()
+		end)
+	end)
+
+	-- =============================================
+	-- Add New Binding section
+	-- =============================================
+	local addLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	addLabel:SetPoint("TOPLEFT", 8, -288)
+	addLabel:SetText("Add New Binding:")
+	addLabel:SetTextColor(0.9, 0.8, 0.5)
+
+	local addFrame = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+	addFrame:SetPoint("TOPLEFT", 4, -304)
+	addFrame:SetPoint("BOTTOMRIGHT", -4, 8)
+	addFrame:SetBackdrop({
+		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+		edgeSize = 10,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 },
+	})
+	addFrame:SetBackdropColor(0.1, 0.12, 0.1, 0.7)
+	addFrame:SetBackdropBorderColor(0.3, 0.5, 0.3, 0.6)
+
+	-- Row 1: Key + Type + Unit
+	local row1Y = -10
+
+	-- Key label + editbox
+	local keyLabel = addFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	keyLabel:SetPoint("TOPLEFT", 10, row1Y)
+	keyLabel:SetText("Key:")
+
+	local keyEditBox = CreateFrame("EditBox", nil, addFrame, "InputBoxTemplate")
+	keyEditBox:SetSize(100, 22)
+	keyEditBox:SetPoint("TOPLEFT", 10, row1Y - 16)
+	keyEditBox:SetAutoFocus(false)
+	keyEditBox:SetFontObject(GameFontHighlightSmall)
+	keyEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+	-- Type dropdown
+	local typeLabel = addFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	typeLabel:SetPoint("TOPLEFT", 125, row1Y)
+	typeLabel:SetText("Type:")
+
+	local typeDropdown = CreateSimpleDropdown(addFrame, 125, row1Y - 16, 90, BIND_TYPES, "spell")
+
+	-- Unit dropdown
+	local unitLabel = addFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	unitLabel:SetPoint("TOPLEFT", 230, row1Y)
+	unitLabel:SetText("Unit:")
+
+	local unitDropdown = CreateSimpleDropdown(addFrame, 230, row1Y - 16, 110, BIND_UNITS, "none")
+
+	-- Row 2: Spell/Action name + drop zone + Add button
+	local row2Y = row1Y - 52
+
+	local spellLabel = addFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	spellLabel:SetPoint("TOPLEFT", 10, row2Y)
+	spellLabel:SetText("Spell / Action / Item / Macro Name:")
+
+	local spellEditBox = CreateFrame("EditBox", nil, addFrame, "InputBoxTemplate")
+	spellEditBox:SetSize(260, 22)
+	spellEditBox:SetPoint("TOPLEFT", 10, row2Y - 16)
+	spellEditBox:SetAutoFocus(false)
+	spellEditBox:SetFontObject(GameFontHighlightSmall)
+	spellEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	spellEditBox.typeDropdown = typeDropdown -- Link for auto-type-switch on drop
+
+	-- Also accept drops directly on the editbox
+	spellEditBox:SetScript("OnReceiveDrag", function(self) HandleSpellDropForBind(self) end)
+	spellEditBox:SetScript("OnMouseDown", function(self, button)
+		if button == "LeftButton" then
+			local cursorType = GetCursorInfo()
+			if cursorType == "spell" or cursorType == "item" or cursorType == "macro" then
+				HandleSpellDropForBind(self)
+			end
+		end
+	end)
+
+	-- Spell drop zone
+	local spellDrop = CreateFrame("Button", nil, addFrame, "BackdropTemplate")
+	spellDrop:SetSize(140, 28)
+	spellDrop:SetPoint("LEFT", spellEditBox, "RIGHT", 10, 0)
+	spellDrop:SetBackdrop({
+		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+		edgeSize = 8,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 },
+	})
+	spellDrop:SetBackdropColor(0.15, 0.2, 0.15, 0.6)
+	spellDrop:SetBackdropBorderColor(0.3, 0.5, 0.3, 0.7)
+
+	local spellDropText = spellDrop:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	spellDropText:SetPoint("CENTER")
+	spellDropText:SetText("Drop spell here")
+	spellDropText:SetTextColor(0.5, 0.9, 0.5)
+
+	spellDrop:SetScript("OnClick", function() HandleSpellDropForBind(spellEditBox) end)
+	spellDrop:SetScript("OnReceiveDrag", function() HandleSpellDropForBind(spellEditBox) end)
+	spellDrop:SetScript("OnEnter", function(self)
+		local cursorType = GetCursorInfo()
+		if cursorType == "spell" or cursorType == "item" then
+			self:SetBackdropColor(0.2, 0.4, 0.2, 0.8)
+			self:SetBackdropBorderColor(0.4, 0.8, 0.4, 1)
+		end
+	end)
+	spellDrop:SetScript("OnLeave", function(self)
+		self:SetBackdropColor(0.15, 0.2, 0.15, 0.6)
+		self:SetBackdropBorderColor(0.3, 0.5, 0.3, 0.7)
+	end)
+
+	-- When type changes to spell, hint the user
+	typeDropdown.OnValueChanged = function(self, val)
+		if val == "spell" then
+			spellLabel:SetText("Spell / Action / Item / Macro Name: (or drop a spell)")
+		else
+			spellLabel:SetText("Spell / Action / Item / Macro Name:")
+		end
+	end
+
+	-- Row 3: Status message + Add button
+	local row3Y = row2Y - 46
+
+	local statusText = addFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	statusText:SetPoint("TOPLEFT", 10, row3Y)
+	statusText:SetWidth(320)
+	statusText:SetJustifyH("LEFT")
+	statusText:SetText("")
+
+	local addBtn = CreateFrame("Button", nil, addFrame, "UIPanelButtonTemplate")
+	addBtn:SetSize(110, 26)
+	addBtn:SetPoint("TOPRIGHT", -12, row3Y + 2)
+	addBtn:SetText("Add Binding")
+	addBtn:SetScript("OnClick", function()
+		local key = keyEditBox:GetText()
+		local bType = typeDropdown:GetValue()
+		local bUnit = unitDropdown:GetValue()
+		local bName = spellEditBox:GetText()
+
+		-- Validate
+		if not key or key == "" then
+			statusText:SetText("|cffff4040Error: Key is required|r")
+			return
+		end
+		if not bName or bName == "" then
+			statusText:SetText("|cffff4040Error: Name is required|r")
+			return
+		end
+		if not KU_CheckBindingType(bType) then
+			statusText:SetText("|cffff4040Error: Invalid type '" .. bType .. "'|r")
+			return
+		end
+		if not KU_CheckBindingUnit(bUnit) then
+			statusText:SetText("|cffff4040Error: Invalid unit '" .. bUnit .. "'|r")
+			return
+		end
+
+		-- Check if key already assigned
+		local binds = KU_GetBindings()
+		if binds then
+			for _, info in ipairs(binds) do
+				if string.lower(info.key) == string.lower(key) then
+					statusText:SetText("|cffff4040Error: Key '" .. key .. "' already assigned to '" .. info.name .. "'|r")
+					return
+				end
+			end
+		end
+
+		KU_AddSpellBinding(bType, bName, bUnit, key)
+		statusText:SetText("|cff40ff40Binding added: [" .. key .. "] " .. bType .. " '" .. bName .. "' -> " .. bUnit .. "|r")
+
+		-- Clear form
+		keyEditBox:SetText("")
+		spellEditBox:SetText("")
+
+		RefreshBindList()
+	end)
+
+	categoryPanels[3] = panel
+	return panel
+end
+
+-------------------------------------------------------------------
 -- Show / hide category panels
 -------------------------------------------------------------------
 function KU_Options_ShowCategory(index)
@@ -924,6 +1575,8 @@ function KU_Options_ShowCategory(index)
 	if index == 2 then
 		UpdateMountTabHighlight()
 		RefreshMountList()
+	elseif index == 3 then
+		RefreshBindList()
 	end
 end
 
@@ -937,6 +1590,7 @@ function KU_OpenOptionsPanel()
 		CreateSidebar(mainFrame)
 		CreateGeneralPanel(contentArea)
 		CreateMountsPanel(contentArea)
+		CreateBindsPanel(contentArea)
 	end
 
 	if mainFrame:IsShown() then

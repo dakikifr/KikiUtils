@@ -698,12 +698,14 @@ end
 
 local function KU_MustBip(str)
 	local comp = KU_GetToonConfigString("BipStr");
-	if ((comp ~= "") and strfind(string.lower(str), string.lower(comp)))
+	if (comp ~= "")
 	then
-		return true;
-	else
-		return false;
+		local ok, found = pcall(strfind, string.lower(tostring(str)), string.lower(comp))
+		if ok and found then
+			return true;
+		end
 	end
+	return false;
 end
 
 function KU_GetInventoryName(bag, slot)
@@ -3467,14 +3469,14 @@ function _KU_CreateMountMacros(landmount, flymount)
 
 	-- OOC Macro
 	macrotext = "";
-	if (C_Covenants.GetActiveCovenantID() == 3)
+	--[[if (C_Covenants.GetActiveCovenantID() == 3)
 	then
 		local numForms = GetNumShapeshiftForms()
 		macrotext = macrotext ..
 				"/cast [stance:" ..
 				tostring(numForms + 1) ..
 				"]" .. GetSpellInfo(324701) .. "\n/stopmacro [stance:" .. tostring(numForms + 1) .. "]\n"; -- Flicker
-	end
+	end]]
 
 	if (landmount)
 	then
