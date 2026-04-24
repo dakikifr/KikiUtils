@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-		Version 14.1
+		Version 14.2
 
 		ChangeLog :
 			- 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -698,14 +698,12 @@ end
 
 local function KU_MustBip(str)
 	local comp = KU_GetToonConfigString("BipStr");
-	if (comp ~= "")
+	if ((comp ~= "") and strfind(string.lower(str), string.lower(comp)))
 	then
-		local ok, found = pcall(strfind, string.lower(tostring(str)), string.lower(comp))
-		if ok and found then
-			return true;
-		end
+		return true;
+	else
+		return false;
 	end
-	return false;
 end
 
 function KU_GetInventoryName(bag, slot)
@@ -1174,7 +1172,6 @@ local function KU_Commands(command)
 			showpercent .. "]|r - " .. "Shows target frame health values AND percent");
 		KU_ChatPrint("  |cffffffff/ku automusic (on|off|toggle)|r |cff2040ff[" ..
 			automusic .. "]|r - " .. "Automatically disables music when fighting a boss");
-		KU_ChatPrint("  |cffffffff/ku options|r - " .. "Open graphical options panel");
 	elseif (cmd == "percent")
 	then
 		KU_Commands_ParamParse(param, "percent", "ShowPercent", KU_SetShowPercent);
@@ -1947,9 +1944,6 @@ local function KU_Commands(command)
 	elseif (cmd == "youparry")
 	then
 		KU_Commands_ParamParse(param, "youparry", "Parry", KU_SetNewYouParry);
-	elseif (cmd == "options")
-	then
-		KU_OpenOptionsPanel();
 	else
 		KU_ChatPrint(KU_CHAT_CMD_UNKNOWN);
 	end
@@ -3469,14 +3463,14 @@ function _KU_CreateMountMacros(landmount, flymount)
 
 	-- OOC Macro
 	macrotext = "";
-	--[[if (C_Covenants.GetActiveCovenantID() == 3)
+	if (C_Covenants.GetActiveCovenantID() == 3)
 	then
 		local numForms = GetNumShapeshiftForms()
 		macrotext = macrotext ..
 				"/cast [stance:" ..
 				tostring(numForms + 1) ..
-				"]" .. GetSpellInfo(324701) .. "\n/stopmacro [stance:" .. tostring(numForms + 1) .. "]\n"; -- Flicker
-	end]]
+				"]" .. GetSpellInfo(324701) .. "\n/stopmacro [stance:" .. tostring(numForms + 1) .. "]\n";                     -- Flicker
+	end
 
 	if (landmount)
 	then
@@ -3998,32 +3992,6 @@ end
 function KU_HasBIPF() -- Broken Isles Pathfinder
 	return KU_HasSpell(233368);
 end
-
--------------------------------------------------------------------
--- API table for Options Panel
--------------------------------------------------------------------
-KU_API = {
-	SetToonConfig = KU_SetToonConfig,
-	GetToonConfig = KU_GetToonConfig,
-	GetToonConfigString = KU_GetToonConfigString,
-	GetToonConfigInt = KU_GetToonConfigInt,
-	ChatPrint = KU_ChatPrint,
-	ApplyConfigChange = function(name)
-		if name == "EnableClock" then
-			KU_SetClock(false)
-		elseif name == "LockClock" then
-			KU_SetClockLock(false)
-		elseif name == "HideSpellActivationOverlay" then
-			KU_SetNewSpellActivationOverlay(false)
-		elseif name == "ShowPercent" then
-			KU_SetShowPercent(false)
-		elseif name == "DebugMode" then
-			KU_SetNewDebugMode(false)
-		elseif name == "LossOfControl" then
-			KU_SetNewLossOfControl(false)
-		end
-	end,
-}
 
 function KU_BuyItem(itemID, quantity)
 	local itemName = GetItemInfo(itemID);
