@@ -460,11 +460,12 @@ local function CreateGeneralPanel(parent)
 
 	-- Bags offset
 	local bagOffsetBox
-	bagOffsetBox, yPos = CreateInputRow(scrollChild, "Bags Y-Offset (blank to disable):", 16, yPos, 80, "AdjustBags", true)
+	bagOffsetBox, yPos = CreateInputRow(scrollChild, "Bags Y-Offset (blank to disable):", 16, yPos, 80, "AdjustBags", true,
+		true)
 
 	-- Bags scale
 	local bagScaleBox
-	bagScaleBox, yPos = CreateInputRow(scrollChild, "Bags Scale:", 16, yPos, 80, "ScaleBags", true)
+	bagScaleBox, yPos = CreateInputRow(scrollChild, "Bags Scale:", 16, yPos, 80, "ScaleBags", true, true)
 
 	-- Set content height
 	scrollChild:SetHeight(math.abs(yPos) + 20)
@@ -1059,12 +1060,16 @@ local function CreateSimpleDropdown(parent, x, y, width, items, defaultValue)
 
 	-- Menu frame
 	local menuFrame = nil
+	local closingMenu = false
 
 	local function CloseMenu()
+		if closingMenu then return end
 		if menuFrame then
+			closingMenu = true
 			menuFrame:Hide()
 			menuFrame:SetParent(nil)
 			menuFrame = nil
+			closingMenu = false
 		end
 	end
 

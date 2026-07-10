@@ -1,6 +1,6 @@
 --[[
 Kiki Utils by Kiki
-		Version 14.1
+		Version 14.2
 
 		ChangeLog :
 			- 1.0 : January, 14th 2005 : Module created. Added KU_SelfOrTarget and KU_Attack functions.
@@ -380,60 +380,8 @@ local function KU_GetScreenHeight(firstCol)
 end
 
 function KU_updateContainerFrameAnchors()
-	local CONTAINER_WIDTH = 192
-	local CONTAINER_SCALE = 0.75
-	local VISIBLE_CONTAINER_SPACING = 3
 	local CONTAINER_OFFSET_Y = KU_GetToonConfigInt("AdjustBags", 70);
 	local containerScale = KU_GetToonConfigInt("ScaleBags", 1.0);
-	local xOffset, yOffset, screenHeight, freeScreenHeight, leftMostPoint, column;
-	local screenWidth = GetScreenWidth();
-	local leftLimit = 0;
-	if (BankFrame:IsShown()) then
-		leftLimit = BankFrame:GetRight() - 25;
-	end
-
-	while (containerScale > CONTAINER_SCALE) do
-		screenHeight = KU_GetScreenHeight(true) / containerScale;
-		-- Adjust the start anchor for bags depending on the multibars
-		xOffset = CONTAINER_OFFSET_X / containerScale;
-		yOffset = CONTAINER_OFFSET_Y / containerScale;
-		-- freeScreenHeight determines when to start a new column of bags
-		freeScreenHeight = screenHeight - yOffset;
-		leftMostPoint = screenWidth - xOffset;
-		column = 1;
-		local frameHeight;
-		local framesInColumn = 0;
-		local forceScaleDecrease = false;
-		for index, frame in ipairs(ContainerFrameSettingsManager:GetBagsShown()) do
-			framesInColumn = framesInColumn + 1;
-			frameHeight = frame:GetHeight(true);
-			if (freeScreenHeight < frameHeight) then
-				if framesInColumn == 1 then
-					-- If this is the only frame in the column and it doesn't fit, then scale must be reduced and the iteration restarted
-					forceScaleDecrease = true;
-					break;
-				else
-					-- Start a new column
-					column = column + 1;
-					framesInColumn = 0; -- kind of a lie, at this point there's actually a single frame in the new column, but this simplifies where to increment.
-					leftMostPoint = screenWidth - (column * frame:GetWidth(true) * containerScale) - xOffset;
-					freeScreenHeight = screenHeight - yOffset;
-				end
-			end
-
-			freeScreenHeight = freeScreenHeight - frameHeight;
-		end
-
-		if forceScaleDecrease or (leftMostPoint < leftLimit) then
-			containerScale = containerScale - 0.01;
-		else
-			break;
-		end
-	end
-
-	if (containerScale < CONTAINER_SCALE) then
-		containerScale = CONTAINER_SCALE;
-	end
 
 	local screenHeight = KU_GetScreenHeight(true) / containerScale;
 	-- Adjust the start anchor for bags depending on the multibars
@@ -696,16 +644,34 @@ local function KU_CheckApplySoulBindBranches()
 	end
 end
 
+-- Track self-sent chat messages to avoid Kstring/secret string comparison in 12.0.5
+local KU_LastSentChatMsg = nil
+hooksecurefunc("SendChatMessage", function(msg, chatType)
+	if chatType == "GUILD" or chatType == "PARTY" or chatType == "RAID" then
+		KU_LastSentChatMsg = msg
+	end
+end)
+
 local function KU_MustBip(str)
 	local comp = KU_GetToonConfigString("BipStr");
-	if (comp ~= "")
+	if ((comp ~= "") and strfind(string.lower(str), string.lower(comp)))
 	then
-		local ok, found = pcall(strfind, string.lower(tostring(str)), string.lower(comp))
-		if ok and found then
-			return true;
-		end
+		return true;
+	else
+		return false;
 	end
-	return false;
+end
+
+local function KU_ChatBipFilter(self, event, msg, ...)
+	if KU_LastSentChatMsg and KU_LastSentChatMsg == msg then
+		KU_LastSentChatMsg = nil
+		return false
+	end
+	KU_LastSentChatMsg = nil
+	if KU_MustBip(msg) then
+		PlaySoundFile("Interface\\AddOns\\KikiUtils\\coin.wav")
+	end
+	return false
 end
 
 function KU_GetInventoryName(bag, slot)
@@ -2717,15 +2683,6 @@ function KikiUtils_OnEvent(self, event, ...)
 	elseif (event == "BAG_UPDATE")
 	then
 		KU_MustCheckMount = 1;
-	elseif ((event == "CHAT_MSG_GUILD") or (event == "CHAT_MSG_PARTY") or (event == "CHAT_MSG_RAID"))
-	then
-		if (not securecallfunction(rawequal, UnitName("player"), select(2, ...)))
-		then
-			if (KU_MustBip(select(1, ...)))
-			then
-				PlaySoundFile("Interface\\AddOns\\KikiUtils\\coin.wav");
-			end
-		end
 	elseif (event == "UNIT_COMBAT")
 	then
 		if (KU_GetToonConfig("Dodge") and select(1, ...) == "player" and select(2, ...) == "DODGE")
@@ -2866,10 +2823,11 @@ function KikiUtils_OnLoad(self)
 	self:RegisterEvent("PLAYER_REGEN_DISABLED");
 	self:RegisterEvent("PLAYER_REGEN_ENABLED");
 	self:RegisterEvent("BAG_UPDATE");
-	self:RegisterEvent("CHAT_MSG_GUILD");
-	self:RegisterEvent("CHAT_MSG_PARTY");
-	self:RegisterEvent("CHAT_MSG_RAID");
 	self:RegisterEvent("UNIT_COMBAT");
+	-- Chat bip handled via ChatFrame_AddMessageEventFilter (avoids Kstring issues in 12.0.5)
+	ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", KU_ChatBipFilter)
+	ChatFrame_AddMessageEventFilter("CHAT_MSG_PARTY", KU_ChatBipFilter)
+	ChatFrame_AddMessageEventFilter("CHAT_MSG_RAID", KU_ChatBipFilter)
 	--self:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF");
 	self:RegisterEvent("ZONE_CHANGED_NEW_AREA");
 	--self:RegisterEvent("UNIT_POWER_BAR_SHOW");
@@ -3809,8 +3767,15 @@ local function KikiUtils_SetupCure()
 	then
 		local expungeSpell = GetSpellInfo(365585) -- Expunge
 		local unravelSpell = GetSpellInfo(368432) -- Unravel
-		local macroText = "/cast [harm] " .. unravelSpell .. " ; " .. expungeSpell;
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText
+		if unravelSpell and expungeSpell then
+			macroText = "/cast [harm] " .. unravelSpell .. " ; " .. expungeSpell
+		elseif expungeSpell then
+			macroText = "/cast " .. expungeSpell
+		end
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText)
+		end
 	end
 end
 
@@ -4021,6 +3986,8 @@ KU_API = {
 			KU_SetNewDebugMode(false)
 		elseif name == "LossOfControl" then
 			KU_SetNewLossOfControl(false)
+		elseif name == "ScaleBags" or name == "AdjustBags" then
+			KU_updateContainerFrameAnchors()
 		end
 	end,
 }
