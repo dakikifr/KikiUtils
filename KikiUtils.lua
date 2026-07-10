@@ -137,6 +137,11 @@ Kiki Utils by Kiki
 		- 12.1:
 		 - Nov, 27th 2022:
 			- Added Evoker's Expunge
+		- 14.3:
+		 - July, 10th 2026:
+			- Added automatic per-spec swapping of Omnium Folio runes (12.0.7). Set your
+			  runes, "/ku omnium save", and they re-apply whenever you switch to that spec.
+			  Commands: /ku omnium save|apply|clear|status
 
 		Features :
 			- Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -222,6 +227,13 @@ local KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Nothing;
 local KU_SoulBindTypeToApply = EnumSoulBindType.Spec;
 local KU_SoulBindPathsToApply = {};
 local KU_SoulBindIDToApply = 0;
+-- Omnium Folio (aka "Runes of Power"), added in patch 12.0.7. It is a generic
+-- C_Traits tree (like dragonriding), NOT a soulbind, so it uses a completely
+-- different API. We auto-swap its choice runes per spec, like the soulbinds above.
+local KU_OMNIUM_TREE_ID = 1186;
+local KU_OmniumConfigID = nil; -- resolved lazily + cached for the session
+local KU_NeedToCheckForOmnium = EnumSoulBindCheck.Nothing;
+local KU_TimeToCheckForOmnium = 0;
 local KU_MustSwapDefaultIdol = false;
 local KU_GainAttacks = "";
 local KU_CurrentZone = nil;
@@ -461,10 +473,16 @@ local function KU_CheckTalentTree(fromTalentChange)
 			KU_NeedToCheckForSoulbind = EnumSoulBindCheck.CheckOnly
 			KU_SoulBindTypeToApply = EnumSoulBindType.Spec
 			KU_TimeToCheckForSoulbind = KU_CurrentTime + 6.0
+			-- On login/zone we only warn (never silently restage traits at load)
+			KU_NeedToCheckForOmnium = EnumSoulBindCheck.CheckOnly
+			KU_TimeToCheckForOmnium = KU_CurrentTime + 6.0
 		else
 			KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Apply
 			KU_SoulBindTypeToApply = EnumSoulBindType.Spec
 			KU_TimeToCheckForSoulbind = KU_CurrentTime + 0.5
+			-- Real spec change -> actually re-apply the saved Omnium runes
+			KU_NeedToCheckForOmnium = EnumSoulBindCheck.Apply
+			KU_TimeToCheckForOmnium = KU_CurrentTime + 0.5
 		end
 	end
 end
@@ -641,6 +659,303 @@ local function KU_CheckApplySoulBindBranches()
 				KU_ChatPrint("Soulbind Path applied", 0.2, 1.0, 0.2)
 			end
 		end
+	end
+end
+
+--------------- Omnium Folio (Runes of Power) ---------------
+-- The Omnium Folio is a generic C_Traits system (same machinery as dragonriding),
+-- so we read/write it through C_Traits, NOT C_Soulbinds. We only touch "choice"
+-- nodes (the runes where you pick 1-of-N); purchased/unlocked runes are left alone.
+
+-- Resolve the folio's traits config ID WITHOUT needing its UI open. It is a
+-- "generic" trait system; rather than hardcode a systemID that could change, we
+-- scan the trait systems and keep the one whose config owns the Omnium tree.
+local function KU_GetOmniumConfigID()
+	if KU_OmniumConfigID ~= nil
+	then
+		return KU_OmniumConfigID
+	end
+	if not (C_Traits and C_Traits.GetConfigIDBySystemID and C_Traits.GetConfigInfo)
+	then
+		return nil
+	end
+	for systemID = 1, 40
+	do
+		local configID
+		pcall(function() configID = C_Traits.GetConfigIDBySystemID(systemID) end)
+		if configID and configID ~= 0
+		then
+			local info
+			pcall(function() info = C_Traits.GetConfigInfo(configID) end)
+			if info and type(info.treeIDs) == "table"
+			then
+				for _, tid in ipairs(info.treeIDs)
+				do
+					if tid == KU_OMNIUM_TREE_ID
+					then
+						KU_OmniumConfigID = configID
+						return configID
+					end
+				end
+			end
+		end
+	end
+	-- Fallback: read it straight off the live folio frame. Try to load (not show)
+	-- the landing page addon first so this can still work if the systemID scan
+	-- came up empty and the player hasn't opened the folio yet this session.
+	if C_AddOns and C_AddOns.LoadAddOn
+	then
+		pcall(C_AddOns.LoadAddOn, "Blizzard_ExpansionLandingPage")
+	end
+	local elp = _G.ExpansionLandingPage
+	local ov = elp and elp.Overlay
+	local mlo = ov and ov.MidnightLandingOverlay
+	local rof = mlo and mlo.RunesOfPowerFrame
+	if rof and rof.GetConfigID
+	then
+		local ok, id = pcall(rof.GetConfigID, rof)
+		if ok and id and id > 0
+		then
+			KU_OmniumConfigID = id
+			return id
+		end
+	end
+	return nil
+end
+
+-- Best-effort human readable name for a folio rune entry (its spell name).
+local function KU_OmniumEntryName(configID, entryID)
+	local name
+	pcall(function()
+		local e = C_Traits.GetEntryInfo(configID, entryID)
+		local def = e and e.definitionID and C_Traits.GetDefinitionInfo(e.definitionID)
+		local spellID = def and (def.overriddenSpellID or def.spellID)
+		if spellID
+		then
+			name = GetSpellInfo(spellID)
+		end
+	end)
+	return name or ("rune #" .. tostring(entryID))
+end
+
+-- Snapshot the currently selected folio choice runes as { [nodeID] = entryID }.
+-- Returns {} when there is nothing to choose, or nil when the folio can't be read.
+local function KU_GetOmniumSelection()
+	local configID = KU_GetOmniumConfigID()
+	if not configID
+	then
+		return nil
+	end
+	local selection = {}
+	local ok = pcall(function()
+		local nodes = C_Traits.GetTreeNodes(KU_OMNIUM_TREE_ID)
+		if type(nodes) ~= "table"
+		then
+			return
+		end
+		for _, nodeID in ipairs(nodes)
+		do
+			local n = C_Traits.GetNodeInfo(configID, nodeID)
+			if n
+			then
+				local isChoice = (n.entryIDs and #n.entryIDs > 1)
+					or (Enum and Enum.TraitNodeType and n.type == Enum.TraitNodeType.Selection)
+				if isChoice and n.activeEntry and n.activeEntry.entryID
+				then
+					selection[nodeID] = n.activeEntry.entryID
+				end
+			end
+		end
+	end)
+	if not ok
+	then
+		return nil
+	end
+	return selection
+end
+
+-- Per-toon Omnium selections, keyed by spec (KU_ActiveTree) exactly like the soulbinds.
+local function KU_GetOmniumStore()
+	local store = KU_GetToonConfig("Omnium")
+	if type(store) ~= "table"
+	then
+		store = {}
+		KU_SetToonConfig("Omnium", store)
+	end
+	return store
+end
+
+-- State-machine step (called every frame, mirrors KU_CheckApplySoulBind): when a
+-- spec change scheduled a check/apply, stage the saved runes and commit them.
+local function KU_CheckApplyOmnium()
+	if KU_NeedToCheckForOmnium == EnumSoulBindCheck.Nothing or KU_CurrentTime < KU_TimeToCheckForOmnium
+	then
+		return
+	end
+	-- Never stage/commit traits during combat; retry shortly after.
+	if InCombatLockdown()
+	then
+		KU_TimeToCheckForOmnium = KU_CurrentTime + 1.0
+		return
+	end
+
+	local action = KU_NeedToCheckForOmnium
+	KU_NeedToCheckForOmnium = EnumSoulBindCheck.Nothing
+
+	if KU_ActiveTree == nil
+	then
+		return
+	end
+	local store = KU_GetOmniumStore()
+	local wanted = store[KU_ActiveTree]
+	if type(wanted) ~= "table" or next(wanted) == nil
+	then
+		return -- nothing saved for this spec -> feature is a no-op here
+	end
+
+	local configID = KU_GetOmniumConfigID()
+	if not configID
+	then
+		return -- folio not resolvable yet; stay silent in the automatic path
+	end
+
+	-- Which saved choice nodes currently differ from what we want?
+	local changes, count = {}, 0
+	local okRead = pcall(function()
+		for nodeID, entryID in pairs(wanted)
+		do
+			local n = C_Traits.GetNodeInfo(configID, nodeID)
+			local cur = n and n.activeEntry and n.activeEntry.entryID
+			if cur ~= entryID
+			then
+				changes[nodeID] = entryID
+				count = count + 1
+			end
+		end
+	end)
+	if not okRead
+	then
+		return
+	end
+
+	if count == 0
+	then
+		return -- already correct, nothing to do (stay quiet)
+	end
+
+	if action == EnumSoulBindCheck.CheckOnly
+	then
+		KU_Announce("Omnium runes differ from the ones saved for this spec", 1.0, 0.4, 0.2)
+		return
+	end
+
+	-- Apply: stage each selection, then commit the config in one go.
+	local staged = 0
+	for nodeID, entryID in pairs(changes)
+	do
+		local ok = false
+		pcall(function() ok = C_Traits.SetSelection(configID, nodeID, entryID) end)
+		if ok
+		then
+			staged = staged + 1
+		end
+	end
+	if staged == 0
+	then
+		KU_OmniumConfigID = nil -- cached config may be stale; force a re-resolve next time
+		KU_Announce("Omnium: WARNING could not stage rune changes", 1.0, 0.1, 0.1)
+		return
+	end
+
+	local committed = false
+	pcall(function() committed = C_Traits.CommitConfig(configID) end)
+	if committed
+	then
+		KU_ChatPrint("Omnium runes updated for this spec (" .. tostring(staged) .. " changed)", 0.2, 1.0, 0.2)
+	else
+		pcall(function() if C_Traits.RollbackConfig then C_Traits.RollbackConfig(configID) end end)
+		KU_Announce("Omnium: WARNING failed to apply rune changes (in combat or restricted area?)", 1.0, 0.1, 0.1)
+	end
+end
+
+-- /ku omnium status : list what is saved for the current spec + live state.
+local function KU_OmniumStatus(spec, store)
+	local configID = KU_GetOmniumConfigID()
+	KU_ChatPrint("Omnium runes for spec #" .. tostring(spec) .. ":")
+	if not configID
+	then
+		KU_ChatPrint("  Folio config not found (open the Omnium Folio once, then retry)", 1.0, 0.6, 0.15)
+	end
+	local saved = store[spec]
+	if type(saved) ~= "table" or next(saved) == nil
+	then
+		KU_ChatPrint("  Nothing saved yet - use /ku omnium save")
+		return
+	end
+	for nodeID, entryID in pairs(saved)
+	do
+		local name = configID and KU_OmniumEntryName(configID, entryID) or ("rune #" .. tostring(entryID))
+		local marker = ""
+		if configID
+		then
+			local cur
+			pcall(function()
+				local n = C_Traits.GetNodeInfo(configID, nodeID)
+				cur = n and n.activeEntry and n.activeEntry.entryID
+			end)
+			marker = (cur == entryID) and " |cff20ff20(active)|r" or " |cffff8000(not active)|r"
+		end
+		KU_ChatPrint("  - " .. name .. marker)
+	end
+end
+
+-- /ku omnium <save|apply|clear|status>
+local function KU_OmniumCommand(param)
+	param = param and strlower(param) or ""
+	local spec = KU_ActiveTree or GetSpecialization()
+	if spec == nil or spec == 0
+	then
+		KU_ChatPrint("Omnium: no active specialization detected yet", 1.0, 0.2, 0.2)
+		return
+	end
+	local store = KU_GetOmniumStore()
+
+	if param == "save"
+	then
+		if not KU_GetOmniumConfigID()
+		then
+			KU_ChatPrint("Omnium: folio config not found (open the Omnium Folio once, then retry)", 1.0, 0.2, 0.2)
+			return
+		end
+		local sel = KU_GetOmniumSelection()
+		if not sel or next(sel) == nil
+		then
+			KU_ChatPrint("Omnium: no selectable rune found to save yet", 1.0, 0.6, 0.15)
+			return
+		end
+		store[spec] = sel
+		local n = 0
+		for _ in pairs(sel) do n = n + 1 end
+		KU_ChatPrint("Omnium runes saved for this spec (" .. tostring(n) .. " choice" .. (n > 1 and "s" or "") .. ")", 0.2, 1.0, 0.2)
+	elseif param == "apply"
+	then
+		if type(store[spec]) ~= "table" or next(store[spec]) == nil
+		then
+			KU_ChatPrint("Omnium: nothing saved for this spec (use /ku omnium save first)", 1.0, 0.2, 0.2)
+			return
+		end
+		KU_NeedToCheckForOmnium = EnumSoulBindCheck.Apply
+		KU_TimeToCheckForOmnium = KU_CurrentTime
+		KU_ChatPrint("Omnium: applying saved runes for this spec...")
+	elseif param == "clear"
+	then
+		store[spec] = nil
+		KU_ChatPrint("Omnium: cleared saved runes for this spec", 0.2, 1.0, 0.2)
+	elseif param == "" or param == "status"
+	then
+		KU_OmniumStatus(spec, store)
+	else
+		KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR .. "omnium " .. param)
 	end
 end
 
@@ -1140,6 +1455,7 @@ local function KU_Commands(command)
 			showpercent .. "]|r - " .. "Shows target frame health values AND percent");
 		KU_ChatPrint("  |cffffffff/ku automusic (on|off|toggle)|r |cff2040ff[" ..
 			automusic .. "]|r - " .. "Automatically disables music when fighting a boss");
+		KU_ChatPrint("  |cffffffff/ku omnium (save|apply|clear|status)|r - " .. "Auto-swap Omnium Folio runes per spec (save current picks, they re-apply on spec change)");
 		KU_ChatPrint("  |cffffffff/ku options|r - " .. "Open graphical options panel");
 	elseif (cmd == "percent")
 	then
@@ -1822,6 +2138,9 @@ local function KU_Commands(command)
 		else
 			KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR .. "sb " .. param);
 		end
+	elseif (cmd == "omnium")
+	then
+		KU_OmniumCommand(param);
 	elseif (cmd == "binds")
 	then
 		KU_BindingsList();
@@ -3853,6 +4172,7 @@ local function evFrameOnUpdate(self, elapsed)
 	KU_CurrentTime = KU_CurrentTime + elapsed
 	KU_CheckApplySoulBind()
 	KU_CheckApplySoulBindBranches()
+	KU_CheckApplyOmnium()
 end
 evFrame:SetScript("OnEvent", evFrameOnEvent);
 evFrame:SetScript("OnUpdate", evFrameOnUpdate);
