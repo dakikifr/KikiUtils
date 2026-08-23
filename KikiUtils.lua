@@ -759,7 +759,7 @@ local function KU_GetOmniumSelection()
 			if n
 			then
 				local isChoice = (n.entryIDs and #n.entryIDs > 1)
-					or (Enum and Enum.TraitNodeType and n.type == Enum.TraitNodeType.Selection)
+						or (Enum and Enum.TraitNodeType and n.type == Enum.TraitNodeType.Selection)
 				if isChoice and n.activeEntry and n.activeEntry.entryID
 				then
 					selection[nodeID] = n.activeEntry.entryID
@@ -936,7 +936,8 @@ local function KU_OmniumCommand(param)
 		store[spec] = sel
 		local n = 0
 		for _ in pairs(sel) do n = n + 1 end
-		KU_ChatPrint("Omnium runes saved for this spec (" .. tostring(n) .. " choice" .. (n > 1 and "s" or "") .. ")", 0.2, 1.0, 0.2)
+		KU_ChatPrint("Omnium runes saved for this spec (" .. tostring(n) .. " choice" .. (n > 1 and "s" or "") .. ")", 0.2,
+			1.0, 0.2)
 	elseif param == "apply"
 	then
 		if type(store[spec]) ~= "table" or next(store[spec]) == nil
@@ -1455,7 +1456,8 @@ local function KU_Commands(command)
 			showpercent .. "]|r - " .. "Shows target frame health values AND percent");
 		KU_ChatPrint("  |cffffffff/ku automusic (on|off|toggle)|r |cff2040ff[" ..
 			automusic .. "]|r - " .. "Automatically disables music when fighting a boss");
-		KU_ChatPrint("  |cffffffff/ku omnium (save|apply|clear|status)|r - " .. "Auto-swap Omnium Folio runes per spec (save current picks, they re-apply on spec change)");
+		KU_ChatPrint("  |cffffffff/ku omnium (save|apply|clear|status)|r - " ..
+		"Auto-swap Omnium Folio runes per spec (save current picks, they re-apply on spec change)");
 		KU_ChatPrint("  |cffffffff/ku options|r - " .. "Open graphical options panel");
 	elseif (cmd == "percent")
 	then
