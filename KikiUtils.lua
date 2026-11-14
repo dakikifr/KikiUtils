@@ -1457,7 +1457,7 @@ local function KU_Commands(command)
 		KU_ChatPrint("  |cffffffff/ku automusic (on|off|toggle)|r |cff2040ff[" ..
 			automusic .. "]|r - " .. "Automatically disables music when fighting a boss");
 		KU_ChatPrint("  |cffffffff/ku omnium (save|apply|clear|status)|r - " ..
-		"Auto-swap Omnium Folio runes per spec (save current picks, they re-apply on spec change)");
+			"Auto-swap Omnium Folio runes per spec (save current picks, they re-apply on spec change)");
 		KU_ChatPrint("  |cffffffff/ku options|r - " .. "Open graphical options panel");
 	elseif (cmd == "percent")
 	then
@@ -4033,6 +4033,21 @@ local function KikiUtils_SetupCureButton(button, name, key_name, spellID)
 	end
 end
 
+-- Defensive (friendly/self) dispel spells per class, used both by the dispel
+-- keybind setup below and by the Dispel Alert icon (KikiUtils_DispelIcon.lua) to
+-- detect whether your dispel is off cooldown. Offensive purges (Purge, Spellsteal,
+-- Soothe, Consume Magic, Tranq Shot, ...) are intentionally excluded here.
+-- Multiple entries per class cover different specs (e.g. Monk Detox differs by spec).
+KU_DISPEL_SPELLS = {
+	SHAMAN  = { 51886, 77130 },          -- Cleanse Spirit, Purify Spirit (resto)
+	DRUID   = { 88423, 2782 },           -- Nature's Cure (resto), Remove Corruption
+	MAGE    = { 475 },                   -- Remove Curse
+	PALADIN = { 4987, 213644 },          -- Cleanse (holy), Cleanse Toxins
+	MONK    = { 115450, 218164 },        -- Detox (mistweaver), Detox (ww/brm)
+	PRIEST  = { 527, 213634 },           -- Purify (disc/holy), Purify Disease
+	EVOKER  = { 365585, 360823, 374251 }, -- Expunge, Naturalize (pres), Cauterizing Flame
+}
+
 local function KikiUtils_SetupCure()
 	local _, cls = UnitClass("player");
 	if (cls == "SHAMAN")
@@ -4070,8 +4085,9 @@ local function KikiUtils_SetupCure()
 	elseif (cls == "MONK")
 	then
 		local dispelSpell = GetSpellInfo(115450) -- Detox (Poison/Disease)
-		local otherSpell = GetSpellInfo(116095) -- Disable
-		local macroText = "/cast [spec:3,harm] " .. otherSpell .. " ; " .. dispelSpell;
+		--local otherSpell = GetSpellInfo(116095) -- Disable
+		--local macroText = "/cancelaura Blessing of Protection\n/cast [spec:3,harm] " .. otherSpell .. " ; " .. dispelSpell;
+		local macroText = "/cancelaura Blessing of Protection\n/cast " .. dispelSpell;
 		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
 		--KikiUtils_SetupCureButton(KU_DB,"KU_DB","KIKIUTILS_DISPEL",115450);
 	elseif (cls == "DEMONHUNTER")
@@ -4310,6 +4326,10 @@ KU_API = {
 			KU_SetNewLossOfControl(false)
 		elseif name == "ScaleBags" or name == "AdjustBags" then
 			KU_updateContainerFrameAnchors()
+		elseif name == "DispelIconEnable" or name == "DispelIconLock"
+				or name == "DispelIconSize" or name == "DispelIconShowStacks"
+				or name == "DispelIconCheckCD" or name == "DispelIconHideOnCD" then
+			if KU_DispelIcon_ApplyConfig then KU_DispelIcon_ApplyConfig() end
 		end
 	end,
 }

@@ -282,6 +282,42 @@ local function CreateInputRow(parent, label, x, y, width, configKey, isNumber, a
 end
 
 -------------------------------------------------------------------
+-- UI Helper: Create a slider (label + slider + live value)
+-------------------------------------------------------------------
+local function CreateSlider(parent, label, x, y, width, configKey, minVal, maxVal, step, default, applyAfter)
+	local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	lbl:SetPoint("TOPLEFT", x, y)
+	lbl:SetText(label)
+
+	local slider = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
+	slider:SetWidth(width)
+	slider:SetPoint("TOPLEFT", x + 6, y - 20)
+	slider:SetMinMaxValues(minVal, maxVal)
+	slider:SetValueStep(step)
+	slider:SetObeyStepOnDrag(true)
+
+	local current = GetConfigInt(configKey, default)
+	slider:SetValue(current)
+
+	-- OptionsSliderTemplate exposes Low/High/Text via global name; nil name -> use children
+	if slider.Low then slider.Low:SetText(tostring(minVal)) end
+	if slider.High then slider.High:SetText(tostring(maxVal)) end
+
+	local valText = slider:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	valText:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+	valText:SetText(tostring(current))
+
+	slider:SetScript("OnValueChanged", function(self, value)
+		value = math.floor(value + 0.5)
+		valText:SetText(tostring(value))
+		SetConfig(configKey, value)
+		if applyAfter then ApplyConfigChange(configKey) end
+	end)
+
+	return slider, y - 46
+end
+
+-------------------------------------------------------------------
 -- Create the main options frame
 -------------------------------------------------------------------
 local function CreateMainFrame()
@@ -466,6 +502,35 @@ local function CreateGeneralPanel(parent)
 	-- Bags scale
 	local bagScaleBox
 	bagScaleBox, yPos = CreateInputRow(scrollChild, "Bags Scale:", 16, yPos, 80, "ScaleBags", true, true)
+
+	-- Dispel / important-debuff alert icon
+	yPos = yPos - SECTION_SPACING
+	local _, newY5 = CreateSectionHeader(scrollChild, "Dispel Alert Icon", yPos)
+	yPos = newY5 - 4
+
+	local hint = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	hint:SetPoint("TOPLEFT", 16, yPos)
+	hint:SetWidth(560)
+	hint:SetJustifyH("LEFT")
+	hint:SetText("|cff909090Shows a big icon when you have a debuff you can dispel, with a border coloured " ..
+		"by dispel type. Unlock to drag/resize; a placeholder icon is shown while unlocked.|r")
+	yPos = yPos - 40
+
+	CreateCheckbox(scrollChild, "Enable Dispel Alert Icon", 16, yPos, "DispelIconEnable", true)
+	yPos = yPos - CHECKBOX_SPACING
+	CreateCheckbox(scrollChild, "Lock Position (click-through)", 16, yPos, "DispelIconLock", true)
+	yPos = yPos - CHECKBOX_SPACING
+	CreateCheckbox(scrollChild, "Show Stack Count", 16, yPos, "DispelIconShowStacks", true)
+	yPos = yPos - CHECKBOX_SPACING
+	CreateCheckbox(scrollChild, "React to your dispel's cooldown (dim when on CD)", 16, yPos, "DispelIconCheckCD", true)
+	yPos = yPos - CHECKBOX_SPACING
+	-- \194\187 = "\194\187" (U+00BB). Latin-1, so WoW's fonts have the glyph; the
+	-- previous marker was U+21B3 and rendered as an empty box.
+	CreateCheckbox(scrollChild, "   \194\187 Fully hide (instead of dimming) while on cooldown", 16, yPos, "DispelIconHideOnCD", true)
+	yPos = yPos - CHECKBOX_SPACING - 6
+
+	local sizeSlider
+	sizeSlider, yPos = CreateSlider(scrollChild, "Icon Size:", 16, yPos, 200, "DispelIconSize", 32, 128, 1, 64, true)
 
 	-- Set content height
 	scrollChild:SetHeight(math.abs(yPos) + 20)
