@@ -43,8 +43,10 @@ if ( GetLocale() == "frFR" ) then
   KU_CHAT_CLOCK_OFF = "L’horloge n’est plus affichée";
   KU_CHAT_CLOCK_LOCK_ON = "L’horloge est maintenant verrouillée";
   KU_CHAT_CLOCK_LOCK_OFF = "L’horloge n’est plus verrouillée";
-  KU_CHAT_TRACK_ON = "L’affichage du warning en cas de pistage non actif est activé";
-  KU_CHAT_TRACK_OFF = "L’affichage du warning en cas de pistage est désactivé";
+  KU_CHAT_TRACK_ON = "L’affichage du warning en cas de pistage de métier non actif est activé";
+  KU_CHAT_TRACK_OFF = "L’affichage du warning en cas de pistage de métier non actif est désactivé";
+  KU_CHAT_AURA_ON = "L’affichage du warning si aucune aura de paladin n’est active est activé";
+  KU_CHAT_AURA_OFF = "L’affichage du warning si aucune aura de paladin n’est active est désactivé";
   KU_CHAT_LEVEL_ON = "Les niveaux des quetes sont maintenant affichés";
   KU_CHAT_LEVEL_OFF = "Les niveaux des quetes ne sont plus affichés";
   KU_CHAT_BAGS_ON = "Ajuste la position des sacs dans le coin bas droit";
@@ -74,7 +76,8 @@ if ( GetLocale() == "frFR" ) then
   KU_CHAT_HELP_FIGHT = "Passe automatiquement en mode combat après une métamorphose (si vous ciblez un ennemi)";
   KU_CHAT_HELP_CLOCK = "Affiche ou non l’horloge simple";
   KU_CHAT_HELP_CLOCK_LOCK = "Verrouille ou non la position de l’horloge simple";
-  KU_CHAT_HELP_TRACK = "Affiche un warning si aucun pistage n’est actif";
+  KU_CHAT_HELP_TRACK = "Après un changement de zone ou une résurrection, alerte toutes les 15 sec tant qu’aucun pistage de métier (herbes, minerais) n’est actif";
+  KU_CHAT_HELP_AURA = "Paladin : après un changement de zone, une résurrection ou la perte de l’aura, alerte toutes les 15 sec tant qu’aucune aura n’est active";
   KU_CHAT_HELP_LEVEL = "Affiche le niveau des quetes dans le journal";
   KU_CHAT_HELP_BAGS = "Ajuste la position des sacs dans le coin bas droit de l'écran";
   KU_CHAT_HELP_TARGETS = "Nombre maximum de cibles à parcourir dans la fonction KU_TotemKiller";
@@ -103,7 +106,8 @@ if ( GetLocale() == "frFR" ) then
   KU_CHAT_HELP_BFMM = "Affiche la minimap de BG (meme dans le monde !)";
   KU_CHAT_CMD_PARAM_ERROR = "Erreur de paramètre pour la commande ";
   KU_CHAT_CMD_UNKNOWN = "Commande inconnue pour /ku (essayez /ku help)";
-  KU_CHAT_TRACK_WARN = "Vous n’avez aucun pistage actif !";
+  KU_CHAT_TRACK_WARN = "Pistage de métier inactif (%s) !"; -- $1=tracking names
+  KU_CHAT_AURA_WARN = "Aucune aura de paladin active !";
   KU_CHAT_NO_MOUNT = "Aucune monture définie. Utilisez /ku addmount <Nom de la monture>";
   KU_CHAT_MOUNT_NOTFOUND = "Monture non trouvée dans les sacs avec le nom spécifié (essayez /ku help) : ";
   KU_CHAT_SB_KEY_ALREADY_ASSIGNED = "Key '%s' already assigned to spell '%s'."; -- $1=key $2=spell
@@ -190,6 +194,8 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_CLOCK_LOCK_OFF = "Uhr wird nicht angezeigt";
   KU_CHAT_TRACK_ON = "Warnt wenn die Zielsuche aktiviert, aber nicht definiert ist";
   KU_CHAT_TRACK_OFF = "Warnt wenn die Zielsuche deaktiviert, aber nicht definiert ist";
+  KU_CHAT_AURA_ON = "Warnung bei fehlender Paladin-Aura ist aktiviert";
+  KU_CHAT_AURA_OFF = "Warnung bei fehlender Paladin-Aura ist deaktiviert";
   KU_CHAT_LEVEL_ON = "Questlevel werden angezeigt";
   KU_CHAT_LEVEL_OFF = "Questlevel werden nicht angezeigt";
   KU_CHAT_BAGS_ON = "Adjust bags position in the bottom right corner of the screen";
@@ -220,6 +226,7 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_HELP_CLOCK = "Zeigt die einfache Uhr an oder nicht";
   KU_CHAT_HELP_CLOCK_LOCK = "Sperrt die Position der einfachen Uhr, oder gibt sie frei";
   KU_CHAT_HELP_TRACK = "Gibt eine Warnmeldung aus wenn keine Zielsuche aktiviert ist";
+  KU_CHAT_HELP_AURA = "Paladin: warnt alle 15 Sek., solange keine Aura aktiv ist (nach Zonenwechsel, Wiederbelebung oder Verlust der Aura)";
   KU_CHAT_HELP_LEVEL = "Shows or not, quest levels in quest log";
   KU_CHAT_HELP_BAGS = "Adjust bags position in the bottom right corner of the screen";
   KU_CHAT_HELP_TARGETS = "Maximale Anzahl der Ziele f�r die KU_TotemKiller Funktion";
@@ -248,7 +255,8 @@ elseif ( GetLocale() == "deDE" ) then
   KU_CHAT_HELP_BFMM = "Shows the battlefield minimap (even in the outside world!)";
   KU_CHAT_CMD_PARAM_ERROR = "Falscher oder fehlender Parameter f�r Befehl ";
   KU_CHAT_CMD_UNKNOWN = "Unbekannter /ak Befehl (versuche /ak help)";
-  KU_CHAT_TRACK_WARN = "Du hast keine aktive Zielsuche !";
+  KU_CHAT_TRACK_WARN = "Keine Berufs-Zielsuche aktiv (%s) !"; -- $1=tracking names
+  KU_CHAT_AURA_WARN = "Keine Paladin-Aura aktiv !";
   KU_CHAT_NO_MOUNT = "Kein Reittier definiert. Benutze /ku addmount <Reittier Name>";
   KU_CHAT_MOUNT_NOTFOUND = "Kein Reittier in deinen Taschen gefunden mit dem angegebenen Namen (versuche /ku help) : ";
   KU_CHAT_SB_SPELL_ASSIGNED = "Binding to key '%s' activated: Type='%s' Name='%s' Target='%s'"; -- $1=key $2=type $3=name $4=unit
@@ -332,8 +340,10 @@ else
   KU_CHAT_CLOCK_OFF = "Clock is no longer displayed";
   KU_CHAT_CLOCK_LOCK_ON = "Clock is now locked";
   KU_CHAT_CLOCK_LOCK_OFF = "Clock is no longer locked";
-  KU_CHAT_TRACK_ON = "Warning if no tracking is set is Enabled";
-  KU_CHAT_TRACK_OFF = "Warning if no tracking is set is Disabled";
+  KU_CHAT_TRACK_ON = "Warning if no profession tracking is set is Enabled";
+  KU_CHAT_TRACK_OFF = "Warning if no profession tracking is set is Disabled";
+  KU_CHAT_AURA_ON = "Warning if no paladin aura is active is Enabled";
+  KU_CHAT_AURA_OFF = "Warning if no paladin aura is active is Disabled";
   KU_CHAT_LEVEL_ON = "Quest levels are now shown";
   KU_CHAT_LEVEL_OFF = "Quest levels are no longer shown";
   KU_CHAT_BAGS_ON = "Adjust bags position in the bottom right corner of the screen";
@@ -363,7 +373,8 @@ else
   KU_CHAT_HELP_FIGHT = "Automatically enters Fight mode after a shapeshift (if you have an hostile target)";
   KU_CHAT_HELP_CLOCK = "Displays or not the simple clock";
   KU_CHAT_HELP_CLOCK_LOCK = "Locks or not the position of the simple clock";
-  KU_CHAT_HELP_TRACK = "Prints a warning if no tracking is active";
+  KU_CHAT_HELP_TRACK = "After zoning or resurrecting, warns every 15 sec while no profession tracking (herbs, minerals) is active";
+  KU_CHAT_HELP_AURA = "Paladin: after zoning, resurrecting or losing the aura, warns every 15 sec while no aura is active";
   KU_CHAT_HELP_LEVEL = "Shows or not, quest levels in quest log";
   KU_CHAT_HELP_BAGS = "Adjust bags position in the bottom right corner of the screen";
   KU_CHAT_HELP_TARGETS = "Maximum number of targets to search in KU_TotemKiller function";
@@ -392,7 +403,8 @@ else
   KU_CHAT_HELP_BFMM = "Shows the battlefield minimap (even in the outside world!)";
   KU_CHAT_CMD_PARAM_ERROR = "Unknown parameter for command ";
   KU_CHAT_CMD_UNKNOWN = "Unknown command for /ku (try /ku help)";
-  KU_CHAT_TRACK_WARN = "You have no active Tracking !";
+  KU_CHAT_TRACK_WARN = "Profession tracking is off (%s) !"; -- $1=tracking names
+  KU_CHAT_AURA_WARN = "No paladin aura active !";
   KU_CHAT_NO_MOUNT = "No mount defined. Use /ku addmount <Mount Name>";
   KU_CHAT_MOUNT_NOTFOUND = "Mount not found in your bags with the specified name (try /ku help) : ";
   KU_CHAT_SB_KEY_ALREADY_ASSIGNED = "Key '%s' already assigned to spell '%s'."; -- $1=key $2=spell

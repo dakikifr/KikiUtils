@@ -142,6 +142,16 @@ Kiki Utils by Kiki
 			- Added automatic per-spec swapping of Omnium Folio runes (12.0.7). Set your
 			  runes, "/ku omnium save", and they re-apply whenever you switch to that spec.
 			  Commands: /ku omnium save|apply|clear|status
+		- 14.4:
+		 - November, 14th 2026:
+			- Restored the "track" option: warns a few seconds after zoning or resurrecting if no
+			  herb/mineral tracking is active (/ku track on|off|toggle, or the options panel).
+			  Shown like a raid warning (with its sound), repeated every 15 sec until a tracking is active
+			  (not during combat)
+			- Easy Travel shifts to Aquatic Form when swimming on clients where it is a separate form (WoW Forever)
+		 - November, 18th 2026:
+			- Restored the paladin "aura" option: same warning when no aura is active, after zoning, resurrecting
+			  or losing the aura (/ku aura on|off|toggle, or the options panel)
 
 		Features :
 			- Easy mounts : Auto detecting special mounts (AQ40 mostly) and using them when needed. You can specify any number of mounts, one will be used randomly.
@@ -198,6 +208,22 @@ local EnumSoulBindType = { Spec = "Spec", PvP = "PvP", Instance = "Instance", Ra
 
 --------------- Aliases ---------------
 local GetAddOnMetadata = C_AddOns.GetAddOnMetadata
+local KU_HasSpecializations = (GetSpecialization ~= nil)
+-- WoW Forever has no specializations: fall back to the active talent group (or 1)
+-- so per-spec settings (bindings, ...) still work. Retail uses the real API.
+local GetSpecialization = GetSpecialization
+		or (C_SpecializationInfo and C_SpecializationInfo.GetSpecialization)
+		or function()
+			if C_SpecializationInfo and C_SpecializationInfo.GetActiveSpecGroup then
+				return C_SpecializationInfo.GetActiveSpecGroup() or 1
+			elseif GetActiveTalentGroup then
+				return GetActiveTalentGroup() or 1
+			end
+			return 1
+		end
+local GetNumSpecializations = GetNumSpecializations or function() return 1 end
+-- Soulbinds/Covenants only exist on retail
+local KU_HasSoulbinds = (C_Covenants ~= nil and C_Soulbinds ~= nil)
 
 --------------- Local variables ---------------
 local KU_VERSION = GetAddOnMetadata("KikiUtils", "Version");
@@ -238,7 +264,19 @@ local KU_MustSwapDefaultIdol = false;
 local KU_GainAttacks = "";
 local KU_CurrentZone = nil;
 local KU_Clock_LastTime = 0;
-local KU_TrackCheck_LastTime = 0;
+local KU_NeedToCheckTrack = false;
+local KU_TimeToCheckTrack = 0;
+local KU_TRACK_CHECK_DELAY = 5.0;
+local KU_TRACK_REMIND_DELAY = 15.0;
+local KU_TRACK_WARNING_DISPLAY_TIME = 8.0;
+local KU_TrackWarnedInChat = false;
+local KU_TrackWarningFrame = nil;
+-- Gathering trackings (same spell IDs as Blizzard's Minimap.lua): Find Herbs, Find Minerals
+local KU_GATHER_TRACKING_SPELLIDS = { [2383] = true, [8387] = true, [2580] = true, [8388] = true };
+-- Paladin aura warning (same delays and display as the tracking warning)
+local KU_NeedToCheckAura = false;
+local KU_TimeToCheckAura = 0;
+local KU_AuraWarnedInChat = false;
 local KU_VarsLoaded = false;
 local KU_NeedInitToonSpecific = true;
 local KU_PlayerOfRealm = nil;
@@ -266,6 +304,8 @@ local KU_MustRestoreMusic = false;
 local KU_FROSTWOLF_WAR_WOLF_SPELLID = 164222;
 local KU_SPEED_OF_LIGHT_SPELLID = 85499;
 local KU_DIVINE_STEED_SPELLID = 190784;
+local KU_TRAVEL_FORM_SPELLID = 783;
+local KU_AQUATIC_FORM_SPELLID = 1066;
 local KU_NextRaidTargetPosition = 1;
 local KU_RaidTargetGUIDs = {};
 local KU_RaidTargetCycleOrderIndex = { 7, 2, 1, 4, 3, 5 }
@@ -301,6 +341,10 @@ local function KU_ChatPrint(str, r, g, b)
 end
 
 local function GetSpellInfo(spellID)
+	if spellID == nil
+	then
+		return nil
+	end
 	local t = C_Spell.GetSpellInfo(spellID)
 	if t ~= nil
 	then
@@ -500,6 +544,7 @@ local function KU_InitDefaults()
 	KU_CheckAndInitDefault("EnableClock", true);
 	KU_CheckAndInitDefault("LockClock", false);
 	KU_CheckAndInitDefault("TrackWarning", false);
+	KU_CheckAndInitDefault("CheckAuras", false);
 	KU_CheckAndInitDefault("ShowPercent", false);
 	KU_CheckAndInitDefault("QuestLevel", true);
 	KU_CheckAndInitDefault("SwapIdol", false);
@@ -598,6 +643,10 @@ local function KU_CheckApplySoulBind()
 	then
 		local action = KU_NeedToCheckForSoulbind
 		KU_NeedToCheckForSoulbind = EnumSoulBindCheck.Nothing
+		if not KU_HasSoulbinds
+		then
+			return
+		end
 
 		local sb = KU_GetSoulBinds(C_Covenants.GetActiveCovenantID())
 		local sbType = sb[KU_SoulBindTypeToApply]
@@ -1187,6 +1236,165 @@ local function KU_SetClockLock(printmsg)
 	end
 end
 
+local function KU_OkToPrintCheckTrack()
+	if (AK_GetCurrentBGIndexAndName and AK_GetCurrentBGIndexAndName() ~= 0)
+	then
+		return false;
+	end
+	local _, instanceType = IsInInstance();
+	if (instanceType == "pvp" or instanceType == "arena")
+	then
+		return false;
+	end
+	return true;
+end
+
+-- Returns the names of the gathering trackings the player knows, and whether one of them is active
+local function KU_GetGatherTracking()
+	local names = {};
+	local active = false;
+	if (not (C_Minimap and C_Minimap.GetNumTrackingTypes and C_Minimap.GetTrackingInfo))
+	then
+		return names, active;
+	end
+	for index = 1, C_Minimap.GetNumTrackingTypes()
+	do
+		local info = C_Minimap.GetTrackingInfo(index);
+		if (info and info.spellID and KU_GATHER_TRACKING_SPELLIDS[info.spellID])
+		then
+			tinsert(names, info.name);
+			if (info.active)
+			then
+				active = true;
+			end
+		end
+	end
+	return names, active;
+end
+
+-- Checks the tracking a few seconds after zoning or coming back to life (option is read when the check fires,
+-- because on login PLAYER_ENTERING_WORLD can come before the toon config is initialized)
+local function KU_ScheduleCheckTrack()
+	KU_NeedToCheckTrack = true;
+	KU_TimeToCheckTrack = KU_CurrentTime + KU_TRACK_CHECK_DELAY;
+	KU_TrackWarnedInChat = false;
+end
+
+-- Shows the message like a raid warning (big text at the top of the screen + raid warning sound).
+-- Uses our own copy of Blizzard's raid warning frame: adding messages to RaidWarningFrame itself from
+-- addon code would taint it (it also displays secret boss emotes)
+local function KU_ShowTrackWarning(msg)
+	local color = ChatTypeInfo and ChatTypeInfo["RAID_WARNING"] or { r = 1.0, g = 0.28, b = 0.0 };
+	if (KU_TrackWarningFrame == nil and RaidWarningFrameMixin)
+	then
+		KU_TrackWarningFrame = CreateFrame("Frame", nil, UIParent, "RaidWarningFrameTemplate");
+		KU_TrackWarningFrame:UnregisterAllEvents(); -- Only our messages, not the real raid warnings a second time
+		KU_TrackWarningFrame:SetFrameStrata("HIGH");
+		-- Just below the real raid warnings (follows them if moved in Edit Mode), so both can be read at the same time
+		KU_TrackWarningFrame:SetPoint("TOP", RaidWarningFrame, "BOTTOM");
+	end
+	if (KU_TrackWarningFrame)
+	then
+		KU_TrackWarningFrame:AddMessage(msg, color, KU_TRACK_WARNING_DISPLAY_TIME);
+	else
+		UIErrorsFrame:AddMessage(msg, color.r, color.g, color.b);
+	end
+	PlaySound(SOUNDKIT.RAID_WARNING);
+end
+
+-- State-machine step (called every frame)
+local function KU_CheckTrack()
+	if (not KU_NeedToCheckTrack or KU_CurrentTime < KU_TimeToCheckTrack)
+	then
+		return;
+	end
+	KU_NeedToCheckTrack = false;
+	-- Reminders stop while dead/ghost (PLAYER_ALIVE/PLAYER_UNGHOST restart them, PLAYER_ALIVE also fires when
+	-- releasing spirit) and in battlegrounds (PLAYER_ENTERING_WORLD restarts them when leaving)
+	if (not KU_GetToonConfig("TrackWarning") or UnitIsDeadOrGhost("player") or not KU_OkToPrintCheckTrack())
+	then
+		return;
+	end
+	local names, active = KU_GetGatherTracking();
+	if (#names == 0 or active)
+	then
+		return;
+	end
+	-- Still no tracking: remind again until one is active
+	KU_NeedToCheckTrack = true;
+	KU_TimeToCheckTrack = KU_CurrentTime + KU_TRACK_REMIND_DELAY;
+	if (InCombatLockdown()) -- No big warning in the middle of a fight
+	then
+		return;
+	end
+	local msg = format(KU_CHAT_TRACK_WARN, table.concat(names, ", "));
+	KU_ShowTrackWarning(msg);
+	if (not KU_TrackWarnedInChat) -- Only once in the chat, not every reminder
+	then
+		KU_ChatPrint(msg, 1.0, 0.5, 0.1);
+		KU_TrackWarnedInChat = true;
+	end
+end
+
+-- Paladin auras are shapeshift forms (stance bar), on retail as on Forever
+local function KU_IsPaladinWithoutAura()
+	if (select(2, UnitClass("player")) ~= "PALADIN" or GetNumShapeshiftForms() == 0) -- No aura learned yet
+	then
+		return false;
+	end
+	return GetShapeshiftForm() == 0;
+end
+
+local function KU_ScheduleCheckAura()
+	KU_NeedToCheckAura = true;
+	KU_TimeToCheckAura = KU_CurrentTime + KU_TRACK_CHECK_DELAY;
+	KU_AuraWarnedInChat = false;
+end
+
+-- State-machine step (called every frame)
+local function KU_CheckAura()
+	if (not KU_NeedToCheckAura or KU_CurrentTime < KU_TimeToCheckAura)
+	then
+		return;
+	end
+	KU_NeedToCheckAura = false;
+	-- Reminders stop while dead/ghost (PLAYER_ALIVE/PLAYER_UNGHOST restart them), and once an aura is active
+	-- (UPDATE_SHAPESHIFT_FORM restarts them if it is lost)
+	if (not KU_GetToonConfig("CheckAuras") or UnitIsDeadOrGhost("player") or not KU_IsPaladinWithoutAura())
+	then
+		return;
+	end
+	-- Still no aura: remind again until one is active
+	KU_NeedToCheckAura = true;
+	KU_TimeToCheckAura = KU_CurrentTime + KU_TRACK_REMIND_DELAY;
+	if (InCombatLockdown()) -- No big warning in the middle of a fight
+	then
+		return;
+	end
+	KU_ShowTrackWarning(KU_CHAT_AURA_WARN);
+	if (not KU_AuraWarnedInChat) -- Only once in the chat, not every reminder
+	then
+		KU_ChatPrint(KU_CHAT_AURA_WARN, 1.0, 0.5, 0.1);
+		KU_AuraWarnedInChat = true;
+	end
+end
+
+local function KU_SetNewAura(printmsg)
+	if (KU_GetToonConfig("CheckAuras"))
+	then
+		if (printmsg)
+		then
+			KU_ChatPrint(KU_CHAT_AURA_ON);
+		end
+		KU_ScheduleCheckAura();
+	else
+		if (printmsg)
+		then
+			KU_ChatPrint(KU_CHAT_AURA_OFF);
+		end
+	end
+end
+
 local function KU_SetNewTrack(printmsg)
 	if (KU_GetToonConfig("TrackWarning"))
 	then
@@ -1194,6 +1402,7 @@ local function KU_SetNewTrack(printmsg)
 		then
 			KU_ChatPrint(KU_CHAT_TRACK_ON);
 		end
+		KU_ScheduleCheckTrack();
 	else
 		if (printmsg)
 		then
@@ -1386,6 +1595,8 @@ local function KU_Commands(command)
 		if (KU_GetToonConfig("LockClock")) then clock_lock = "on"; end
 		local track = "off";
 		if (KU_GetToonConfig("TrackWarning")) then track = "on"; end
+		local aura = "off";
+		if (KU_GetToonConfig("CheckAuras")) then aura = "on"; end
 		local level = "off";
 		if (KU_GetToonConfig("QuestLevel")) then level = "on"; end
 		local bags = "off";
@@ -1418,7 +1629,8 @@ local function KU_Commands(command)
 		KU_ChatPrint("  |cffffffff/ku clock (on|off|toggle)|r |cff2040ff[" .. clock .. "]|r - " .. KU_CHAT_HELP_CLOCK);
 		KU_ChatPrint("  |cffffffff/ku lock (on|off|toggle)|r |cff2040ff[" .. clock_lock .. "]|r - " ..
 			KU_CHAT_HELP_CLOCK_LOCK);
-		--KU_ChatPrint("  |cffffffff/ku track (on|off|toggle)|r |cff2040ff["..track.."]|r - "..KU_CHAT_HELP_TRACK);
+		KU_ChatPrint("  |cffffffff/ku track (on|off|toggle)|r |cff2040ff[" .. track .. "]|r - " .. KU_CHAT_HELP_TRACK);
+		KU_ChatPrint("  |cffffffff/ku aura (on|off|toggle)|r |cff2040ff[" .. aura .. "]|r - " .. KU_CHAT_HELP_AURA);
 		KU_ChatPrint("  |cffffffff/ku level (on|off|toggle)|r |cff2040ff[" .. level .. "]|r - " .. KU_CHAT_HELP_LEVEL);
 		KU_ChatPrint("  |cffffffff/ku bags (on|off|toggle)|r |cff2040ff[" .. bags .. "]|r - " .. KU_CHAT_HELP_BAGS);
 		KU_ChatPrint("  |cffffffff/ku gains (on|off|toggle)|r |cff2040ff[" .. gains .. "]|r - " .. KU_CHAT_HELP_ATTACK_GAIN);
@@ -1594,9 +1806,12 @@ local function KU_Commands(command)
 	elseif (cmd == "lock")
 	then
 		KU_Commands_ParamParse(param, "lock", "LockClock", KU_SetClockLock);
-		--[[elseif(cmd == "track")
+	elseif (cmd == "track")
 	then
-		KU_Commands_ParamParse(param,"track","TrackWarning",KU_SetNewTrack);]]
+		KU_Commands_ParamParse(param, "track", "TrackWarning", KU_SetNewTrack);
+	elseif (cmd == "aura")
+	then
+		KU_Commands_ParamParse(param, "aura", "CheckAuras", KU_SetNewAura);
 	elseif (cmd == "bags")
 	then
 		if (param == "off")
@@ -2110,6 +2325,11 @@ local function KU_Commands(command)
 			KU_ChatPrint(KU_CHAT_CMD_PARAM_ERROR .. "sb");
 			return;
 		end;
+		if not KU_HasSoulbinds
+		then
+			KU_ChatPrint("Soulbinds are not available in this version of the game");
+			return;
+		end
 		local sb = KU_GetSoulBinds(C_Covenants.GetActiveCovenantID())
 		if param == "save"
 		then
@@ -2240,34 +2460,6 @@ local function KU_Commands(command)
 	else
 		KU_ChatPrint(KU_CHAT_CMD_UNKNOWN);
 	end
-end
-
-local function KU_OkToPrintCheckTrack()
-	if (AK_GetCurrentBGIndexAndName and AK_GetCurrentBGIndexAndName() ~= 0)
-	then
-		return false;
-	end
-	return true;
-end
-
-local function KU_CheckTrack()
-	--[[
-	if(KU_GetToonConfig("TrackWarning"))
-	then
-		-- TrackWarning check
-		local Hour, Minute = GetGameTime();
-		
-		if(KU_TrackCheck_LastTime ~= Minute) -- Check every minute
-		then
-			local icon = GetTrackingTexture();
-			if(icon == nil and KU_OkToPrintCheckTrack())
-			then
-				UIErrorsFrame:AddMessage(KU_CHAT_TRACK_WARN, 0.1, 0.8, 0.1, 1.0, UIERRORS_HOLD_TIME);
-			end
-			KU_TrackCheck_LastTime = Minute;
-		end
-	end
-	]] -- Disabled: Function GetTrackingTexture removed
 end
 
 --------------- From XML functions ---------------
@@ -2601,6 +2793,7 @@ local function KikiUtils_StartInitVars()
 		KU_SetNewSpellActivationOverlay(false);
 		KU_SetNewClassBar(false);
 		KU_SetNewTrack(false);
+		KU_SetNewAura(false);
 		KU_SetNewBags(false);
 		KU_SetNewLossOfControl(false);
 		--KU_SetClock(false);
@@ -2820,6 +3013,20 @@ function KikiUtils_OnEvent(self, event, ...)
 	if (event == "VARIABLES_LOADED")
 	then
 		KU_VarsLoaded = true;
+	elseif (event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST")
+	then
+		-- Before the init check below: on login PLAYER_ENTERING_WORLD comes before VARIABLES_LOADED
+		KU_ScheduleCheckTrack();
+		KU_ScheduleCheckAura();
+	elseif (event == "UPDATE_SHAPESHIFT_FORM")
+	then
+		-- Paladin aura lost (or cancelled): warn a few seconds later if none is back. Not rescheduled while a
+		-- check is pending, otherwise repeated form updates would keep pushing it back
+		if (not KU_NeedToCheckAura and KU_IsPaladinWithoutAura())
+		then
+			KU_ScheduleCheckAura();
+		end
+		return;
 	end
 	if (KU_NeedInitToonSpecific)
 	then
@@ -2830,8 +3037,6 @@ function KikiUtils_OnEvent(self, event, ...)
 		KikiUtils_StartInitVars();
 	end
 
-	-- Check Tracking
-	KU_CheckTrack();
 	-- Check events
 	if (event == "PLAYER_ENTER_COMBAT")
 	then
@@ -3133,11 +3338,14 @@ function KikiUtils_OnLoad(self)
 	self:RegisterEvent("PLAYER_LEAVE_COMBAT");
 	self:RegisterEvent("UNIT_AURA");
 	self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS");
+	self:RegisterEvent("UPDATE_SHAPESHIFT_FORM");
 	self:RegisterEvent("VARIABLES_LOADED");
 	self:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED");
 	self:RegisterEvent("AUTOFOLLOW_BEGIN");
 	self:RegisterEvent("AUTOFOLLOW_END");
 	self:RegisterEvent("PLAYER_ENTERING_WORLD");
+	self:RegisterEvent("PLAYER_ALIVE");
+	self:RegisterEvent("PLAYER_UNGHOST");
 	self:RegisterEvent("PLAYER_TARGET_CHANGED");
 	self:RegisterEvent("UNIT_FACTION");
 	--self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
@@ -3677,6 +3885,7 @@ end
 function _KU_CreateMountMacros(landmount, flymount)
 	local macrotext;
 	local travel_name = nil;
+	local aqua_name = nil;
 	local ghost = nil;
 	local mount_add = "";
 	local flyable = false;
@@ -3697,9 +3906,30 @@ function _KU_CreateMountMacros(landmount, flymount)
 
 	if (KU_IsDruid)
 	then
-		local stanceSpellID = select(4, GetShapeshiftFormInfo(3));
+		-- Travel Form is not always form #3 (WoW Forever: Bear, Aquatic, Cat, Travel)
+		local stanceSpellID = nil;
+		for i = 1, GetNumShapeshiftForms()
+		do
+			local formSpellID = select(4, GetShapeshiftFormInfo(i));
+			if formSpellID == KU_TRAVEL_FORM_SPELLID
+			then
+				stanceSpellID = KU_TRAVEL_FORM_SPELLID;
+			elseif formSpellID == KU_AQUATIC_FORM_SPELLID
+			then
+				-- Separate Aquatic Form (WoW Forever). Retail has none: its Travel Form already turns aquatic in water
+				aqua_name = select(2, KU_HasSpell(KU_AQUATIC_FORM_SPELLID));
+			end
+		end
+		if stanceSpellID == nil and KU_HasSpecializations
+		then
+			stanceSpellID = select(4, GetShapeshiftFormInfo(3));
+		end
 		travel_name = select(2, KU_HasSpell(stanceSpellID));
 		mount_add = "stance:0,";
+		if (aqua_name) -- In water, shift to Aquatic Form instead of trying a mount
+		then
+			mount_add = mount_add .. "noswimming,";
+		end
 	end
 
 	if (KU_IsMage)
@@ -3773,15 +4003,24 @@ function _KU_CreateMountMacros(landmount, flymount)
 					"\n";
 		end
 	end
-	if (travel_name)
+	if (travel_name or aqua_name)
 	then
-		macrotext = macrotext .. "/cast ";
-		if (travel_name) -- Have Flight form
+		local forms = {};
+		if (aqua_name) -- Aquatic Form at level 16, before Travel Form (WoW Forever)
 		then
-			macrotext = macrotext .. "[nomounted,stance:0,nocombat" .. flyable_add .. "]" .. travel_name .. ";";
+			tinsert(forms, "[nomounted,stance:0,swimming]" .. aqua_name);
 		end
-		macrotext = macrotext .. "[nomounted,stance:0]" .. travel_name;
-		macrotext = macrotext .. "\n/cancelform [nostance:0]\n";
+		if (travel_name)
+		then
+			tinsert(forms, "[nomounted,stance:0,nocombat" .. flyable_add .. "]" .. travel_name);
+			tinsert(forms, "[nomounted,stance:0]" .. travel_name);
+		end
+		macrotext = macrotext .. "/cast " .. table.concat(forms, ";") .. "\n";
+	end
+	-- Always get back to human form, even before Travel Form is learned (WoW Forever: Bear only at low level)
+	if (KU_IsDruid)
+	then
+		macrotext = macrotext .. "/cancelform [nostance:0]\n";
 	end
 	if (roll_name)
 	then
@@ -3894,14 +4133,16 @@ function KikiUtils_RefreshStance()
 
 			if (i ~= 0)
 			then
+				-- Never shift out when already in the requested form (only Easy Travel gets back to human form)
+				local cancel = "/cancelform [nostance:0,nostance:" .. i .. "]\n";
 				if (STANCE_LIST[i] == KU_FORMS_CAT)
 				then
-					b:SetAttribute("macrotext",
+					b:SetAttribute("macrotext", cancel ..
 						"/cast [nostealth,nocombat,stance:" ..
 						i .. "]" .. KU_PROWL .. "; [stealth,stance:" .. i .. "]" .. KU_PROWL ..
 						"; [nostance:" .. i .. "]" .. STANCE_LIST[i]);
 				else
-					b:SetAttribute("macrotext", "/cancelform\n/cast " .. STANCE_LIST[i]);
+					b:SetAttribute("macrotext", cancel .. "/cast [nostance:" .. i .. "]" .. STANCE_LIST[i]);
 				end
 			else
 				b:SetAttribute("macrotext", "/cancelform");
@@ -4040,7 +4281,7 @@ end
 -- Multiple entries per class cover different specs (e.g. Monk Detox differs by spec).
 KU_DISPEL_SPELLS = {
 	SHAMAN  = { 51886, 77130 },          -- Cleanse Spirit, Purify Spirit (resto)
-	DRUID   = { 88423, 2782 },           -- Nature's Cure (resto), Remove Corruption
+	DRUID   = { 88423, 2782, 8946 },     -- Nature's Cure (resto), Remove Corruption, Cure Poison
 	MAGE    = { 475 },                   -- Remove Curse
 	PALADIN = { 4987, 213644 },          -- Cleanse (holy), Cleanse Toxins
 	MONK    = { 115450, 218164 },        -- Detox (mistweaver), Detox (ww/brm)
@@ -4048,40 +4289,85 @@ KU_DISPEL_SPELLS = {
 	EVOKER  = { 365585, 360823, 374251 }, -- Expunge, Naturalize (pres), Cauterizing Flame
 }
 
+-- Builds "/cast [cond] spell1 ; [cond] spell2 ; spell3" from { { cond, spellID }, ... },
+-- skipping spells that do not exist in this game version (WoW Forever has no
+-- Spellsteal, Cleanse Toxins, Nature's Cure, ...). Returns nil if no spell is left.
+local function KU_BuildCureMacro(entries)
+	local parts = {}
+	for _, entry in ipairs(entries)
+	do
+		local hasSpell, spellName = KU_HasSpell(entry[2])
+		if hasSpell and spellName
+		then
+			tinsert(parts, { entry[1], spellName })
+		end
+	end
+	if #parts == 0
+	then
+		return nil
+	end
+	-- If the unconditional fallback spell was dropped, don't leave the remaining one behind a spec condition
+	local last = parts[#parts]
+	if last[1] and strfind(last[1], "^%[spec:%d+%]$")
+	then
+		last[1] = nil
+	end
+	local texts = {}
+	for _, part in ipairs(parts)
+	do
+		tinsert(texts, part[1] and (part[1] .. " " .. part[2]) or part[2])
+	end
+	return "/cast " .. table.concat(texts, " ; ")
+end
+
 local function KikiUtils_SetupCure()
 	local _, cls = UnitClass("player");
 	if (cls == "SHAMAN")
 	then
-		local dispelSpell = GetSpellInfo(51886) -- Cleanse Spirit (Curse/Magic)
-		local purgeSpell = GetSpellInfo(370)  -- Purge
-		local macroText = "/cast [harm] " .. purgeSpell .. " ; " .. dispelSpell;
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText = KU_BuildCureMacro({
+			{ "[harm]", 370 }, -- Purge
+			{ nil,      51886 }, -- Cleanse Spirit (Curse/Magic)
+		})
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		end
 	elseif (cls == "HUNTER")
 	then
-		--local dispelSpell = GetSpellInfo(51886) -- Cleanse Spirit (Curse/Magic)
-		local tranqSpell = GetSpellInfo(19801) -- Tranquilizing Shot
-		--local macroText = "/cast [harm] "..tranqSpell.." ; "..dispelSpell;
-		local macroText = "/cast [harm] " .. tranqSpell
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText = KU_BuildCureMacro({
+			{ "[harm]", 19801 }, -- Tranquilizing Shot
+		})
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		end
 	elseif (cls == "DRUID")
 	then
-		local healSpell = GetSpellInfo(88423) -- Nature's Cure
-		local otherSpell = GetSpellInfo(2782) -- Remove Corruption
-		local sootheSpell = GetSpellInfo(2908) -- Soothe
-		local macroText = "/cast [harm] " .. sootheSpell .. " ; [spec:4] " .. healSpell .. " ; " .. otherSpell;
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText = KU_BuildCureMacro({
+			{ "[harm]",   2908 }, -- Soothe
+			{ "[spec:4]", 88423 }, -- Nature's Cure
+			{ nil,        2782 }, -- Remove Corruption
+			{ nil,        8946 }, -- Cure Poison
+		})
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		end
 	elseif (cls == "MAGE")
 	then
-		local dispelSpell = GetSpellInfo(475) -- Remove Curse
-		local stealSpell = GetSpellInfo(30449) -- Spellsteal
-		local macroText = "/cast [harm] " .. stealSpell .. " ; " .. dispelSpell;
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText = KU_BuildCureMacro({
+			{ "[harm]", 30449 }, -- Spellsteal
+			{ nil,      475 }, -- Remove Curse
+		})
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		end
 	elseif (cls == "PALADIN")
 	then
-		local holySpell = GetSpellInfo(4987)  -- Cleanse
-		local otherSpell = GetSpellInfo(213644) -- Cleanse Toxins
-		local macroText = "/cast [spec:1] " .. holySpell .. " ; " .. otherSpell;
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText = KU_BuildCureMacro({
+			{ "[spec:1]", 4987 }, -- Cleanse
+			{ nil,        213644 }, -- Cleanse Toxins
+		})
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		end
 	elseif (cls == "MONK")
 	then
 		local dispelSpell = GetSpellInfo(115450) -- Detox (Poison/Disease)
@@ -4095,11 +4381,14 @@ local function KikiUtils_SetupCure()
 		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", 278326); -- Consume Magic
 	elseif (cls == "PRIEST")
 	then
-		local healSpell = GetSpellInfo(527)   -- Purify
-		local otherSpell = GetSpellInfo(213634) -- Purify Disease
-		local offSpell = GetSpellInfo(528)    -- Dispel Magic
-		local macroText = "/cast [harm] " .. offSpell .. " ; [spec:3] " .. otherSpell .. " ; " .. healSpell;
-		KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		local macroText = KU_BuildCureMacro({
+			{ "[harm]",   528 }, -- Dispel Magic
+			{ "[spec:3]", 213634 }, -- Purify Disease
+			{ nil,        527 }, -- Purify
+		})
+		if macroText then
+			KikiUtils_SetupCureButton(KU_DB, "KU_DB", "KIKIUTILS_DISPEL", macroText);
+		end
 	elseif (cls == "EVOKER")
 	then
 		local expungeSpell = GetSpellInfo(365585) -- Expunge
@@ -4191,6 +4480,8 @@ local function evFrameOnUpdate(self, elapsed)
 	KU_CheckApplySoulBind()
 	KU_CheckApplySoulBindBranches()
 	KU_CheckApplyOmnium()
+	KU_CheckTrack()
+	KU_CheckAura()
 end
 evFrame:SetScript("OnEvent", evFrameOnEvent);
 evFrame:SetScript("OnUpdate", evFrameOnUpdate);
@@ -4322,6 +4613,10 @@ KU_API = {
 			KU_SetShowPercent(false)
 		elseif name == "DebugMode" then
 			KU_SetNewDebugMode(false)
+		elseif name == "TrackWarning" then
+			KU_SetNewTrack(false)
+		elseif name == "CheckAuras" then
+			KU_SetNewAura(false)
 		elseif name == "LossOfControl" then
 			KU_SetNewLossOfControl(false)
 		elseif name == "ScaleBags" or name == "AdjustBags" then

@@ -48,6 +48,8 @@ local GENERAL_OPTIONS = {
 	{ key = "Parry",                      label = "Play Sound on Your Parry" },
 	{ key = "AutoDisableMusic",           label = "Auto-disable Music on Boss Fight" },
 	{ section = "Miscellaneous" },
+	{ key = "TrackWarning",               label = "Warn if Herb/Mineral Tracking is Off (after zoning or death)", apply = true },
+	{ key = "CheckAuras",                 label = "Warn if no Paladin Aura is Active (after zoning, death or aura loss)", apply = true },
 	{ key = "DebugMode",                  label = "Debug Mode",                         apply = true },
 }
 
@@ -1392,8 +1394,17 @@ local function CreateBindsPanel(parent)
 	specLabel:SetPoint("TOPLEFT", 8, -6)
 	specLabel:SetTextColor(0.6, 0.6, 0.6)
 	panel:SetScript("OnShow", function()
-		local specIdx = GetSpecialization()
-		local specName = specIdx and select(2, GetSpecializationInfo(specIdx)) or "Unknown"
+		-- WoW Forever has no specializations: show the active talent group instead
+		local specIdx, specName
+		if GetSpecialization and GetSpecializationInfo then
+			specIdx = GetSpecialization()
+			specName = specIdx and select(2, GetSpecializationInfo(specIdx))
+		else
+			specIdx = (C_SpecializationInfo and C_SpecializationInfo.GetActiveSpecGroup and C_SpecializationInfo.GetActiveSpecGroup())
+				or (GetActiveTalentGroup and GetActiveTalentGroup()) or 1
+			specName = "Talents " .. tostring(specIdx)
+		end
+		specName = specName or "Unknown"
 		specLabel:SetText("Current Spec: " .. specName .. " (spec #" .. tostring(specIdx) .. ")")
 	end)
 
